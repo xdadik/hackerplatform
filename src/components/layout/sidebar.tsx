@@ -11,7 +11,6 @@ import {
   BarChart3,
   Building2,
   Settings,
-  GraduationCap,
   Target,
   Shield,
   Award,
@@ -43,7 +42,6 @@ const sections = [
     title: "Learn & Practice",
     items: [
       { label: "Academy", href: "/learn", icon: BookOpen },
-      { label: "Learning Paths", href: "/learn/paths", icon: GraduationCap },
       { label: "Labs", href: "/labs", icon: FlaskConical },
       { label: "Challenges", href: "/challenges", icon: Trophy },
       { label: "Tools", href: "/tools", icon: Wrench },

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { learningPaths } from "@/lib/data"
 import { Stagger, FadeIn, ProgressAnimated } from "@/components/ui/stagger"
-import { Search, Clock, BookOpen, GraduationCap, ChevronRight, Filter, CheckCircle2 } from "lucide-react"
+import { Search, GraduationCap, ChevronRight, Filter } from "lucide-react"
 
 export default function LearnPage() {
   return (
@@ -28,47 +28,10 @@ export default function LearnPage() {
           </div>
         </FadeIn>
 
-        {/* Featured */}
-        <Card className="mb-6 overflow-hidden border-[var(--accent-border)]">
-          <CardContent className="p-0">
-            <div className="grid md:grid-cols-[1.4fr_1fr] gap-0">
-              <div className="p-6">
-                <Badge variant="accent" className="mb-3">Recommended next lesson</Badge>
-                <h2 className="text-[18px] font-[650] tracking-[-0.02em]">Web Security — SQL Injection: Union-Based Extraction</h2>
-                <p className="mt-2 text-[13px] leading-6 text-[var(--text-2)]">Learn to determine column count, identify injectable columns, and extract data with UNION SELECT. Includes a live lab environment.</p>
-                <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px] text-[var(--text-2)]">
-                  <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> 18 min</span>
-                  <span className="flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" /> Lesson 14/32</span>
-                  <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5" /> Intermediate</span>
-                </div>
-                <div className="mt-5 flex items-center gap-3">
-                  <Link href="/learn/web-security"><Button className="rounded-[8px]">Continue lesson</Button></Link>
-                  <span className="text-[11px] text-[var(--text-3)]">Prerequisite: Completed lesson 13</span>
-                </div>
-              </div>
-              <div className="bg-[var(--surface-2)] border-t md:border-t-0 md:border-l border-[var(--border)] p-6">
-                <div className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mb-3">Your path progress</div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[22px] font-[700] tracking-[-0.03em]">72%</span>
-                  <span className="text-[12px] text-[var(--text-2)]">23/32 lessons • 18h remaining</span>
-                </div>
-                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]"><ProgressAnimated value={72} /></div>
-                <div className="mt-4 space-y-2">
-                  <LessonRow done title="13. Error-based Injection" time="14 min" />
-                  <LessonRow active title="14. Union-Based Extraction" time="18 min" />
-                  <LessonRow title="15. Blind Injection" time="22 min" />
-                  <LessonRow title="16. Lab: Extract Users Table" time="45 min" />
-                </div>
-                <Link href="/learn/web-security" className="mt-4 flex items-center justify-center gap-1 text-[12px] font-medium text-[var(--accent)] hover:underline">View full curriculum <ChevronRight className="w-3 h-3" /></Link>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Paths grid */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[14px] font-[650] tracking-[-0.02em]">Learning paths</h2>
-          <span className="text-[12px] text-[var(--text-3)]">{learningPaths.length} paths • 10 domains</span>
+          <h2 className="text-[14px] font-[650] tracking-[-0.02em]">Courses</h2>
+          <span className="text-[12px] text-[var(--text-3)]">{learningPaths.length} courses</span>
         </div>
 
         <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -79,7 +42,9 @@ export default function LearnPage() {
                   <div className="w-9 h-9 rounded-[9px] border border-[var(--border)] flex items-center justify-center bg-[var(--surface-2)] group-hover:bg-[var(--text)] group-hover:text-[var(--background)] transition-colors">
                     <GraduationCap className="w-4 h-4" />
                   </div>
-                  <Badge variant={path.progress === 0 ? "outline" : path.progress > 50 ? "accent" : "secondary"}>{path.progress > 0 ? `${path.progress}%` : "Not started"}</Badge>
+                  <Badge variant={path.id === "cybersecurity-101" ? "success" : path.progress === 0 ? "outline" : path.progress > 50 ? "accent" : "secondary"}>
+                    {path.id === "cybersecurity-101" ? "Free" : path.progress > 0 ? `${path.progress}%` : "Not started"}
+                  </Badge>
                 </div>
                 <div className="text-[14px] font-[600] tracking-[-0.015em]">{path.name}</div>
                 <div className="mt-1 text-[12px] text-[var(--text-2)]">{path.lessons} lessons • {path.duration} • {path.level}</div>
@@ -123,17 +88,5 @@ export default function LearnPage() {
         </Card>
       </div>
     </AppShell>
-  )
-}
-
-function LessonRow({ title, time, done, active }: { title: string, time: string, done?: boolean, active?: boolean }) {
-  return (
-    <div className={`flex items-center gap-2.5 px-2.5 py-2 rounded-[8px] border text-[12.5px] ${active ? "bg-[var(--surface)] border-[var(--accent-border)] text-[var(--accent)] font-[500]" : done ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300" : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-2)]"}`}>
-      <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${done ? "bg-emerald-600 border-emerald-600 text-white" : active ? "bg-[var(--accent)] border-[var(--accent)] text-white" : "border-[var(--border-strong)]"}`}>
-        {done ? <CheckCircle2 className="w-3 h-3" /> : active ? <span className="w-1.5 h-1.5 rounded-full bg-white" /> : null}
-      </span>
-      <span className="flex-1 truncate">{title}</span>
-      <span className="text-[11px] font-mono text-[var(--text-3)] shrink-0">{time}</span>
-    </div>
   )
 }

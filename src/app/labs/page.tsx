@@ -216,7 +216,7 @@ export default function LabsPage() {
                   <CardContent className="p-4">
                     <div className="text-[12px] font-semibold">Need guidance?</div>
                     <div className="text-[12px] text-[var(--text-2)] mt-1 leading-5">Labs include prerequisites and recommended order. Check the Academy path for context before starting Advanced labs.</div>
-                    <Link href="/learn" className="mt-3 inline-flex text-[12px] font-medium text-[var(--accent)] hover:underline">View learning paths →</Link>
+                    <Link href="/learn" className="mt-3 inline-flex text-[12px] font-medium text-[var(--accent)] hover:underline">Browse Academy →</Link>
                   </CardContent>
                 </Card>
               </FadeIn>

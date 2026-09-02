@@ -4,7 +4,7 @@ import * as React from "react"
 import { AppShell } from "@/components/layout/app-shell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp, Star, ChevronRight, Clock, MessageCircle, Play, Search } from "lucide-react"
+import { ChevronDown, ChevronUp, Star, ChevronRight, Clock, MessageCircle, Play, Search, CheckCircle2 } from "lucide-react"
 
 const modules = [
   {
@@ -90,6 +90,18 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
   }
   const [activeLesson, setActiveLesson] = React.useState(data.lessons[0]?.title || "DVWA installation")
   const [expanded, setExpanded] = React.useState(true)
+  const videoRef = React.useRef<HTMLVideoElement>(null)
+  const storageKey = `aegis_lesson_${slug}_completed`
+  const [completed, setCompleted] = React.useState(false)
+
+  React.useEffect(() => {
+    try { setCompleted(localStorage.getItem(storageKey) === "true") } catch {}
+  }, [storageKey])
+
+  const handleVideoEnd = () => {
+    try { localStorage.setItem(storageKey, "true") } catch {}
+    setCompleted(true)
+  }
 
   return (
     <AppShell withSidebar>
@@ -105,12 +117,25 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
           <p className="mt-2 text-[13px] text-[var(--text-2)]">This lesson covers the foundations of cybersecurity — threats, attack surfaces, defense principles, and why this field matters.</p>
           <div className="mt-6 rounded-[12px] overflow-hidden border border-[var(--border)] bg-black">
             <video
+              ref={videoRef}
               src="/videos/cybersecurity-101-intro.mp4"
               controls
               preload="metadata"
+              onEnded={handleVideoEnd}
               className="w-full aspect-video"
             />
           </div>
+          {completed && (
+            <div className="mt-3 flex items-center gap-2 text-[13px] text-emerald-600 dark:text-emerald-400 font-[500]">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Lesson completed</span>
+              <span className="flex items-center gap-0.5 ml-1">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              </span>
+            </div>
+          )}
           <div className="mt-4 flex items-center gap-3 text-[12px] text-[var(--text-2)]">
             <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> 10:34</span>
             <span className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Video lesson</span>
