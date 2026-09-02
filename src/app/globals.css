@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FAFAF9;
+  --surface: #FFFFFF;
+  --surface-2: #F5F5F4;
+  --surface-3: #E7E5E4;
+  --border: #E7E5E4;
+  --border-strong: #D6D3D1;
+  --text: #18181B;
+  --text-2: #71717A;
+  --text-3: #A1A1AA;
+  --accent: #1A56DB;
+  --accent-hover: #1648B8;
+  --accent-muted: #EFF6FF;
+  --accent-border: #BFDBFE;
+  --success: #059669;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+}
+
+.dark {
+  --background: #0F1012;
+  --surface: #17181B;
+  --surface-2: #1D1F23;
+  --surface-3: #252830;
+  --border: #2A2D32;
+  --border-strong: #32363E;
+  --text: #F4F4F5;
+  --text-2: #A1A1AA;
+  --text-3: #71717A;
+  --accent: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-muted: #1E293B;
+  --accent-border: #1E3A5F;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-muted: var(--accent-muted);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius-lg);
+  --radius-lg: var(--radius-xl);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scrollbar-gutter: stable;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+  line-height: 1.6;
+}
+
+::selection {
+  background: var(--accent-muted);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #2A2D32;
+}
+
+/* Animations respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Utility for mono */
+.font-mono {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+/* Subtle grid pattern for hero */
+.grid-pattern {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
