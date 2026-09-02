@@ -120,8 +120,10 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
               ref={videoRef}
               src="/videos/cybersecurity-101-intro.mp4"
               controls
+              controlsList="nodownload"
               preload="metadata"
               onEnded={handleVideoEnd}
+              onContextMenu={(e) => e.preventDefault()}
               className="w-full aspect-video"
             />
           </div>
