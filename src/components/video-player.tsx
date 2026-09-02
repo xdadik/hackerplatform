@@ -13,6 +13,7 @@ export function VideoPlayer({ src, onEnd }: { src: string; onEnd?: () => void })
   const [duration, setDuration] = React.useState("0:00")
   const [muted, setMuted] = React.useState(false)
   const [volume, setVolume] = React.useState(1)
+  const [speed, setSpeed] = React.useState(1)
   const [showControls, setShowControls] = React.useState(true)
   const hideTimer = React.useRef<ReturnType<typeof setTimeout>>()
 
@@ -41,6 +42,14 @@ export function VideoPlayer({ src, onEnd }: { src: string; onEnd?: () => void })
     const v = videoRef.current
     if (!v) return
     v.paused ? v.play() : v.pause()
+  }
+
+  const cycleSpeed = () => {
+    const v = videoRef.current
+    if (!v) return
+    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1
+    v.playbackRate = next
+    setSpeed(next)
   }
 
   React.useEffect(() => {
@@ -147,9 +156,14 @@ export function VideoPlayer({ src, onEnd }: { src: string; onEnd?: () => void })
                 />
                 <span className="text-[11px] text-white/70 font-mono">{currentTime} / {duration}</span>
               </div>
-              <button onClick={toggleFullscreen} className="text-white hover:text-white/80">
-                <Maximize className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={cycleSpeed} className="text-[11px] font-bold text-white/80 hover:text-white px-1.5 py-0.5 rounded border border-white/20 hover:border-white/40 min-w-[32px] text-center transition-colors">
+                  {speed}x
+                </button>
+                <button onClick={toggleFullscreen} className="text-white hover:text-white/80">
+                  <Maximize className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
