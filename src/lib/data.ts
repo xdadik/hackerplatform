@@ -34,7 +34,7 @@ export type Course = {
 }
 
 export const learningPaths = [
-  { id: "cybersecurity-101", name: "What is Cybersecurity", lessons: 1, duration: "50 min", level: "Beginner", progress: 0, color: "#F59E0B" },
+  { id: "cybersecurity-101", name: "What is Cybersecurity", lessons: 1, duration: "10 min", level: "Beginner", progress: 0, color: "#F59E0B" },
   { id: "networking", name: "Networking", lessons: 24, duration: "18h", level: "Beginner", progress: 72, color: "#2563EB" },
   { id: "linux", name: "Linux Fundamentals", lessons: 18, duration: "12h", level: "Beginner", progress: 45, color: "#059669" },
   { id: "web", name: "Web Security", lessons: 32, duration: "28h", level: "Intermediate", progress: 72, color: "#7C3AED" },

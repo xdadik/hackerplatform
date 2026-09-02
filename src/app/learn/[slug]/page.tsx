@@ -41,7 +41,7 @@ const pathData: Record<string, { title: string; breadcrumb: string; lessons: { t
     title: "What is Cybersecurity",
     breadcrumb: "1. Intro",
     lessons: [
-      { title: "What is Cybersecurity?", subtitle: "Lesson 1.1", time: "50 min" },
+      { title: "What is Cybersecurity?", subtitle: "Lesson 1.1", time: "10:34" },
     ],
   },
   networking: {
@@ -112,7 +112,7 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
             />
           </div>
           <div className="mt-4 flex items-center gap-3 text-[12px] text-[var(--text-2)]">
-            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> ~50 min</span>
+            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> 10:34</span>
             <span className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Video lesson</span>
           </div>
           <div className="mt-6 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-5">
