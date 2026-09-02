@@ -2,6 +2,7 @@
 import Link from "next/link"
 import * as React from "react"
 import { AppShell } from "@/components/layout/app-shell"
+import { VideoPlayer } from "@/components/video-player"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp, Star, ChevronRight, Clock, MessageCircle, Play, Search, CheckCircle2 } from "lucide-react"
@@ -90,7 +91,6 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
   }
   const [activeLesson, setActiveLesson] = React.useState(data.lessons[0]?.title || "DVWA installation")
   const [expanded, setExpanded] = React.useState(true)
-  const videoRef = React.useRef<HTMLVideoElement>(null)
   const storageKey = `aegis_lesson_${slug}_completed`
   const [completed, setCompleted] = React.useState(false)
 
@@ -115,17 +115,8 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
           </div>
           <h1 className="text-[24px] font-[700] tracking-[-0.03em] text-[var(--text)]">{data.title}</h1>
           <p className="mt-2 text-[13px] text-[var(--text-2)]">This lesson covers the foundations of cybersecurity — threats, attack surfaces, defense principles, and why this field matters.</p>
-          <div className="mt-6 rounded-[12px] overflow-hidden border border-[var(--border)] bg-black">
-            <video
-              ref={videoRef}
-              src="/videos/cybersecurity-101-intro.mp4"
-              controls
-              controlsList="nodownload"
-              preload="metadata"
-              onEnded={handleVideoEnd}
-              onContextMenu={(e) => e.preventDefault()}
-              className="w-full aspect-video"
-            />
+          <div className="mt-6">
+            <VideoPlayer src="/videos/cybersecurity-101-intro.mp4" onEnd={handleVideoEnd} />
           </div>
           {completed && (
             <div className="mt-3 flex items-center gap-2 text-[13px] text-emerald-600 dark:text-emerald-400 font-[500]">
