@@ -225,8 +225,6 @@ export default function AdminPage() {
             </form>
             <div className="mt-6 pt-4 border-t text-center">
               <Link href="/" className="text-[13px] text-[var(--text-2)] hover:text-[var(--text)] hover:underline">← Back to site</Link>
-              <span className="mx-2 text-[var(--text-3)]">•</span>
-              <a href="/admin.php" className="text-[13px] text-[var(--accent)] hover:underline">Use admin.php</a>
             </div>
           </CardContent>
         </Card>
