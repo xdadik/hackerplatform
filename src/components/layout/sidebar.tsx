@@ -63,7 +63,6 @@ const sections = [
     items: [
       { label: "Teams", href: "/teams", icon: Users },
       { label: "Organizations", href: "/organizations", icon: Building2 },
-      { label: "Admin", href: "/admin", icon: ShieldCheck },
     ]
   },
 ]
@@ -147,10 +146,6 @@ export function Sidebar({ collapsed, mobileOpen }: { collapsed?: boolean, mobile
 
       {!collapsed && (
         <div className="p-2.5 space-y-3 border-t border-[var(--border)] bg-[var(--surface)]">
-          <Link href="/admin" className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors">
-            <Settings className="w-[18px] h-[18px] text-[var(--text-3)]" />
-            <span className="text-[13px] font-[500]">Control Panel</span>
-          </Link>
 
           <div className="relative" ref={dropdownRef}>
             <div className="flex items-center gap-2 rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-2">

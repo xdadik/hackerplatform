@@ -10,6 +10,8 @@ import { CommandPalette } from "@/components/layout/command-palette"
 import { FadeIn, ScaleIn } from "@/components/ui/stagger"
 import { useAuth } from "@/components/auth-provider"
 import { Eye, EyeOff, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react"
+import { sanitizeInput, sanitizeEmail } from "@/lib/sanitize"
+import { loginLimiter } from "@/lib/rate-limit"
 
 function GoogleIcon() {
   return (
@@ -30,15 +32,23 @@ export default function SignupPage() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const rl = loginLimiter.check()
+    if (rl.limited) {
+      setError(`Too many attempts. Try again in ${Math.ceil(rl.resetMs/60000)} min.`)
+      return
+    }
     setError(null)
     setLoading(true)
     const form = e.target as HTMLFormElement
-    const name = (form.elements.namedItem("name") as HTMLInputElement).value
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value
+    const nameRaw = (form.elements.namedItem("name") as HTMLInputElement).value
+    const emailRaw = (form.elements.namedItem("email") as HTMLInputElement).value
     const password = (form.elements.namedItem("password") as HTMLInputElement).value
+    const name = sanitizeInput(nameRaw, 64)
+    const email = sanitizeEmail(emailRaw) || emailRaw.trim()
       setTimeout(() => {
       setLoading(false)
       if (!name || !email.includes("@") || password.length < 8) {
+        loginLimiter.record(false)
         setError("Please enter a name, valid email, and password with at least 8 characters.")
         const card = document.getElementById("signup-card")
         if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -48,6 +58,7 @@ export default function SignupPage() {
         }
         return
       }
+      loginLimiter.reset()
       login(email, name)
       window.location.href = "/dashboard"
     }, 900)

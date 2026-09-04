@@ -15,7 +15,7 @@ export function VideoPlayer({ src, onEnd }: { src: string; onEnd?: () => void })
   const [volume, setVolume] = React.useState(1)
   const [speed, setSpeed] = React.useState(1)
   const [showControls, setShowControls] = React.useState(true)
-  const hideTimer = React.useRef<ReturnType<typeof setTimeout>>()
+  const hideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   React.useEffect(() => {
     let cancelled = false
@@ -79,7 +79,7 @@ export function VideoPlayer({ src, onEnd }: { src: string; onEnd?: () => void })
 
   const resetHide = () => {
     setShowControls(true)
-    clearTimeout(hideTimer.current)
+    if (hideTimer.current) clearTimeout(hideTimer.current)
     if (playing) hideTimer.current = setTimeout(() => setShowControls(false), 3000)
   }
 

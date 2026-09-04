@@ -1,12 +1,16 @@
+"use client"
 import Link from "next/link"
+import * as React from "react"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, BookOpen, FlaskConical, Trophy, FileText, Users, TrendingUp } from "lucide-react"
+import { Search, BookOpen, FlaskConical, Trophy, FileText, Users, TrendingUp, X } from "lucide-react"
 
 export default function ExplorePage() {
+  const [q,setQ]=React.useState("")
+  const recent=["sql injection","iam trust policy","volatility"]
+  const applyRecent=(term:string)=> setQ(term)
+  const clear=()=> setQ("")
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1080px]">
@@ -15,15 +19,20 @@ export default function ExplorePage() {
 
         <div className="mt-6 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-3)]" />
-          <Input placeholder="Search labs, challenges, research, people... (⌘K)" className="pl-10 h-11 text-[14px] bg-[var(--surface)] border-[var(--border)] rounded-[10px]" autoFocus />
+          <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search labs, challenges, research, people... (⌘K)" className="pl-10 h-11 text-[14px] bg-[var(--surface)] border-[var(--border)] rounded-[10px]" autoFocus />
+          {q && <button onClick={clear} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-[8px] hover:bg-[var(--surface-2)] text-[var(--text-3)]"><X className="w-4 h-4" /></button>}
         </div>
 
         <div className="mt-2 flex items-center gap-2 text-[11px] text-[var(--text-3)]">
           <span>Recent:</span>
-          <button className="px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]">sql injection</button>
-          <button className="px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]">iam trust policy</button>
-          <button className="px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]">volatility</button>
+          {recent.map(r=>(
+            <button key={r} onClick={()=>applyRecent(r)} className={`px-2 py-1 rounded-full border ${q===r ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]"}`}>{r}</button>
+          ))}
+          {q && <button onClick={clear} className="ml-2 text-[11px] text-[var(--accent)] hover:underline">Clear</button>}
         </div>
+        {q && (
+          <div className="mt-3 text-[12px] text-[var(--text-2)]">Search for <b className="text-[var(--text)]">&quot;{q}&quot;</b> — <Link href={`/labs?q=${encodeURIComponent(q)}`} className="text-[var(--accent)] hover:underline">Labs</Link> • <Link href={`/challenges?q=${encodeURIComponent(q)}`} className="text-[var(--accent)] hover:underline">Challenges</Link> • <Link href={`/research?q=${encodeURIComponent(q)}`} className="text-[var(--accent)] hover:underline">Research</Link></div>
+        )}
 
         <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <ExploreCard icon={FlaskConical} title="Labs" count="124" desc="Web, Linux, AD, Cloud, Forensics" href="/labs" trending="SQL Injection Fundamentals" />

@@ -10,6 +10,8 @@ import { CommandPalette } from "@/components/layout/command-palette"
 import { FadeIn, ScaleIn } from "@/components/ui/stagger"
 import { useAuth } from "@/components/auth-provider"
 import { Eye, EyeOff, ArrowRight, ShieldCheck, AlertCircle } from "lucide-react"
+import { sanitizeEmail } from "@/lib/sanitize"
+import { loginLimiter } from "@/lib/rate-limit"
 
 function GoogleIcon() {
   return (
@@ -30,15 +32,24 @@ export default function LoginPage() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    // Rate limiting — 5 attempts / 15 min
+    const rl = loginLimiter.check()
+    if (rl.limited) {
+      setError(`Too many attempts. Try again in ${Math.ceil(rl.resetMs/60000)} min.`)
+      return
+    }
     setError(null)
     setLoading(true)
     const form = e.target as HTMLFormElement
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value
+    const emailRaw = (form.elements.namedItem("email") as HTMLInputElement).value
     const password = (form.elements.namedItem("password") as HTMLInputElement).value
+    const email = sanitizeEmail(emailRaw) || emailRaw.trim()
       setTimeout(() => {
       setLoading(false)
       if (!email.includes("@") || password.length < 6) {
-        setError("Invalid email or password. Must be at least 6 characters.")
+        loginLimiter.record(false)
+        const rem = loginLimiter.check().remaining
+        setError(`Invalid email or password. Must be at least 6 characters. Attempts left: ${rem}`)
         // shake animation via anime
         const card = document.getElementById("login-card")
         if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -48,6 +59,7 @@ export default function LoginPage() {
         }
         return
       }
+      loginLimiter.reset()
       login(email)
       window.location.href = "/dashboard"
     }, 900)

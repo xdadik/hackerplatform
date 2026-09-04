@@ -8,12 +8,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { labs } from "@/lib/data"
 import { Stagger, FadeIn, ProgressAnimated } from "@/components/ui/stagger"
-import { Search, Clock, Target, Terminal, Filter, Play, RotateCcw, StickyNote, Flag, Users, ChevronRight, Lock } from "lucide-react"
+import { Search, Clock, Target, Terminal, Filter, Play, RotateCcw, StickyNote, Flag, Users, ChevronRight, Lock, X } from "lucide-react"
 
 const categories = ["All", "Web Security", "Linux", "Windows", "Active Directory", "Network Security", "Cloud Security", "Reverse Engineering", "Forensics", "SOC", "Detection Engineering", "Malware Analysis"]
 
 export default function LabsPage() {
   const [isPaid, setIsPaid] = React.useState(false)
+  const [activeCat, setActiveCat] = React.useState("All")
+  const [q, setQ] = React.useState("")
+  const [reportOpen, setReportOpen] = React.useState(false)
+  const [reportText, setReportText] = React.useState("")
   React.useEffect(() => {
     try {
       const rawUser = localStorage.getItem("aegis_user")
@@ -27,6 +31,44 @@ export default function LabsPage() {
     const auth = localStorage.getItem("aegis_auth")
     setIsPaid(!!auth && (plan === "go" || plan === "plus"))
   }, [])
+
+  const filtered = React.useMemo(() => {
+    return labs.filter(l => {
+      if (activeCat !== "All" && l.category !== activeCat) return false
+      if (q.trim()) {
+        const s = q.toLowerCase()
+        return l.title.toLowerCase().includes(s) || l.description.toLowerCase().includes(s) || l.category.toLowerCase().includes(s)
+      }
+      return true
+    })
+  }, [activeCat, q])
+
+  const handleNotes = () => {
+    try {
+      const note = localStorage.getItem("aegis_lab_notes_sql-injection") || "- tried ' OR 1=1--, got 500"
+      alert(`Notes (localStorage aegis_lab_notes_*):\n${note.slice(0,400)}\n\nOpen a lab → Notes tab to edit. Saved per-lab locally.`)
+    } catch { alert("Notes: open a lab detail page to edit private notes. Saved in localStorage.") }
+  }
+  const handleHints = () => alert("Hints: open the lab detail page → Hints card. 3 hints per lab, 50 XP penalty for last one. Progress stored in localStorage.")
+  const handleReset = () => {
+    if (!isPaid) { alert("Upgrade to Go or Plus to reset labs."); return }
+    if (confirm("Reset lab progress? This clears local progress for this workspace (localStorage).")) {
+      try { localStorage.removeItem("aegis_progress"); localStorage.removeItem("aegis_lesson_progress") } catch {}
+      alert("Lab progress reset (localStorage cleared). Refresh to see 0%.")
+    }
+  }
+  const handleReport = () => setReportOpen(v => !v)
+  const submitReport = () => {
+    if (!reportText.trim()) return alert("Please describe the issue.")
+    try {
+      const prev = JSON.parse(localStorage.getItem("aegis_reports") || "[]")
+      prev.push({ id: Date.now().toString(), text: reportText, page: "labs", at: new Date().toISOString() })
+      localStorage.setItem("aegis_reports", JSON.stringify(prev))
+    } catch {}
+    alert("Report submitted — saved to localStorage (aegis_reports). Admin will review.")
+    setReportText("")
+    setReportOpen(false)
+  }
 
   return (
     <AppShell withSidebar>
@@ -52,9 +94,10 @@ export default function LabsPage() {
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-[280px]">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" />
-                <Input placeholder="Search labs, objectives, tags..." className="pl-8 h-8 bg-[var(--surface)]" />
+                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search labs, objectives, tags..." className="pl-8 h-8 bg-[var(--surface)]" />
+                {q && <button onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
               </div>
-              <Button variant="secondary" size="sm" className="h-8 shrink-0"><Filter className="w-3.5 h-3.5 mr-1" /> Filters</Button>
+              <Button variant="secondary" size="sm" className="h-8 shrink-0" onClick={()=>alert("Filters: Use category pills + search. Category + difficulty filtering is active. Saved in URL state would sync — here local state.")}><Filter className="w-3.5 h-3.5 mr-1" /> Filters</Button>
             </div>
           </div>
         </FadeIn>
@@ -63,7 +106,7 @@ export default function LabsPage() {
         <FadeIn delay={60}>
           <div className="flex gap-1.5 overflow-x-auto pb-3 scrollbar-thin">
             {categories.map(cat => (
-              <button key={cat} className={`px-3 py-1.5 rounded-full text-[12.5px] font-[500] whitespace-nowrap border transition-colors ${cat === "All" ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"}`}>
+              <button key={cat} onClick={()=>setActiveCat(cat)} className={`px-3 py-1.5 rounded-full text-[12.5px] font-[500] whitespace-nowrap border transition-colors ${cat === activeCat ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"}`}>
                 {cat}
               </button>
             ))}
@@ -74,12 +117,12 @@ export default function LabsPage() {
         <div className="grid lg:grid-cols-[1.65fr_1fr] gap-6 mt-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)]">{labs.length} labs • Sorted by recommended</span>
+              <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)]">{filtered.length} labs • Sorted by recommended {q || activeCat!=="All" ? "• filtered" : ""}</span>
               <span className="text-[12px] text-[var(--text-3)] hidden sm:block">Progress saves automatically</span>
             </div>
 
             <Stagger className="grid gap-3">
-              {labs.map(lab => (
+              {filtered.map(lab => (
                 <div key={lab.id} className="stagger-item"><Card className="group hover:shadow-md transition-all hover:-translate-y-[0.5px]">
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex gap-4">
@@ -118,7 +161,7 @@ export default function LabsPage() {
                             </Link>
                           ) : (
                             <Link href={`/labs/${lab.id}`}>
-                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-8">
+                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-8" onClick={()=>{ try{ localStorage.setItem("aegis_last_lab", lab.id)}catch{}}}>
                                 {lab.status === "in_progress" ? <><Play className="w-3.5 h-3.5 mr-1" /> Continue</> : lab.status === "completed" ? "Review" : "Start lab"}
                               </Button>
                             </Link>
@@ -136,7 +179,7 @@ export default function LabsPage() {
                             </Link>
                           ) : (
                             <Link href={`/labs/${lab.id}`}>
-                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-8">
+                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-8" onClick={()=>{ try{ localStorage.setItem("aegis_last_lab", lab.id)}catch{}}}>
                                 {lab.status === "in_progress" ? <><Play className="w-3.5 h-3.5 mr-1" /> Continue</> : lab.status === "completed" ? "Review" : "Start lab"}
                               </Button>
                             </Link>
@@ -148,6 +191,9 @@ export default function LabsPage() {
                   </CardContent>
                 </Card></div>
               ))}
+              {filtered.length===0 && (
+                <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center"><div className="text-[13px] font-[600]">No labs match filters</div><div className="text-[12px] text-[var(--text-2)]">Adjust search or category.</div><Button size="sm" className="mt-3 h-8" onClick={()=>{setQ(""); setActiveCat("All")}}>Clear filters</Button></CardContent></Card>
+              )}
             </Stagger>
           </div>
 
@@ -184,9 +230,9 @@ export default function LabsPage() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
-                    <Button variant="secondary" size="sm" className="h-8 text-[12px]"><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
-                    <Button variant="secondary" size="sm" className="h-8 text-[12px]"><Flag className="w-3 h-3 mr-1" /> Hints</Button>
-                    <Button variant="ghost" size="sm" className="h-8 text-[12px] border border-[var(--border)]"><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
+                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleNotes}><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
+                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleHints}><Flag className="w-3 h-3 mr-1" /> Hints</Button>
+                    <Button variant="ghost" size="sm" className="h-8 text-[12px] border border-[var(--border)]" onClick={handleReset}><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
                   </div>
 
                   <div className="rounded-[10px] bg-[#0F1012] border border-zinc-800 p-3 font-mono text-[12px] leading-relaxed">
@@ -204,10 +250,16 @@ export default function LabsPage() {
                     {!isPaid ? (
                       <Link href="/settings/billing" className="flex-1"><Button className="w-full rounded-[8px] gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock lab</Button></Link>
                     ) : (
-                      <Link href="/labs/sql-injection" className="flex-1"><Button className="w-full rounded-[8px]">Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/labs/sql-injection" className="flex-1"><Button className="w-full rounded-[8px]" onClick={()=>{ try{ localStorage.setItem("aegis_lab_opened","sql-injection")}catch{}}}>Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
                     )}
-                    <Button variant="secondary" className="rounded-[8px]">Report issue</Button>
+                    <Button variant="secondary" className="rounded-[8px]" onClick={handleReport}>Report issue</Button>
                   </div>
+                  {reportOpen && (
+                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2">
+                      <textarea value={reportText} onChange={e=>setReportText(e.target.value)} placeholder="Describe the issue..." className="w-full min-h-[72px] rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[13px]" />
+                      <div className="flex gap-2"><Button size="sm" className="h-8" onClick={submitReport}>Submit report</Button><Button size="sm" variant="ghost" className="h-8" onClick={()=>setReportOpen(false)}>Cancel</Button></div>
+                    </div>
+                  )}
                 </div>
               </Card>
 
@@ -247,14 +299,25 @@ export default function LabsPage() {
                       <ObjectiveRow label="Submit remediation note" />
                     </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleNotes}><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
+                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleHints}><Flag className="w-3 h-3 mr-1" /> Hints</Button>
+                    <Button variant="ghost" size="sm" className="h-8 text-[12px] border border-[var(--border)]" onClick={handleReset}><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
+                  </div>
                   <div className="flex gap-2">
                     {!isPaid ? (
                       <Link href="/settings/billing" className="flex-1"><Button className="w-full rounded-[8px] gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock</Button></Link>
                     ) : (
                       <Link href="/labs/sql-injection" className="flex-1"><Button className="w-full rounded-[8px]">Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
                     )}
-                    <Button variant="secondary" className="rounded-[8px]">Report issue</Button>
+                    <Button variant="secondary" className="rounded-[8px]" onClick={handleReport}>Report issue</Button>
                   </div>
+                  {reportOpen && (
+                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2">
+                      <textarea value={reportText} onChange={e=>setReportText(e.target.value)} placeholder="Describe the issue..." className="w-full min-h-[72px] rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[13px]" />
+                      <div className="flex gap-2"><Button size="sm" className="h-8" onClick={submitReport}>Submit report</Button><Button size="sm" variant="ghost" className="h-8" onClick={()=>setReportOpen(false)}>Cancel</Button></div>
+                    </div>
+                  )}
                 </div>
               </Card>
               <Card>

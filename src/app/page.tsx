@@ -13,22 +13,57 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 
-function HomeGate({ children }: { children: React.ReactNode }) {
-  const { isLoggedIn } = useAuth()
-  if (!isLoggedIn) {
-    return (
-      <div className="mx-auto max-w-[640px] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 text-center">
-        <Badge variant="outline" className="rounded-full mb-4">Platform access requires authentication</Badge>
-        <h1 className="text-[28px] font-[700] tracking-[-0.04em] leading-[1.1]">Aegis platform is inside.</h1>
-        <p className="mt-3 text-[14px] leading-6 text-[var(--text-2)]">Learn, labs, challenges, research, and team operations are available only after you log in. Create an account or continue with Google to get started.</p>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Link href="/login"><Button className="h-10 px-6 rounded-[10px]">Log in</Button></Link>
-          <Link href="/signup"><Button variant="secondary" className="h-10 px-6 rounded-[10px]">Sign up</Button></Link>
+function LandingHero() {
+  return (
+    <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-4">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-8 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-sm">
+        <div className="flex-1 min-w-0">
+          <Badge variant="outline" className="rounded-full mb-3 px-3 py-1 text-[11px] tracking-wide">No credit card required • Free to start</Badge>
+          <h1 className="text-[22px] sm:text-[26px] font-[750] tracking-[-0.03em] leading-tight">Join Aegis — start learning today.</h1>
+          <p className="mt-2 text-[13.5px] leading-6 text-[var(--text-2)] max-w-[58ch]">Create a free account or log in to track progress, save labs, and verify your skills. Your workspace stays private until you authenticate.</p>
+          <div className="mt-2 flex items-center gap-2 text-[11px] text-[var(--text-3)]">
+            <span className="inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 180+ lessons</span>
+            <span>•</span><span>124 labs</span><span>•</span><span>1,204 challenges</span>
+          </div>
         </div>
-        <p className="mt-6 text-[11px] text-[var(--text-3)]">Already have an invite? Use your company email. Your workspace and progress stay private until you authenticate.</p>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 w-full lg:w-auto">
+          <Link href="/signup" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto h-11 px-8 rounded-[10px] text-[15px] font-[650] shadow-sm gap-2">
+              Sign up <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Link href="/login" className="w-full sm:w-auto">
+            <Button variant="outline" size="lg" className="w-full sm:w-auto h-11 px-8 rounded-[10px] text-[15px] font-[700] border-2 border-[var(--border-strong)] bg-white dark:bg-zinc-900 text-[var(--text)] hover:bg-zinc-50 dark:hover:bg-zinc-800 shadow-sm">
+              Log in
+            </Button>
+          </Link>
+        </div>
       </div>
-    )
-  }
+    </section>
+  )
+}
+
+function PlatformCTA() {
+  // Single pair on main page at screenshot location - high contrast Log in
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 shrink-0 lg:pt-2">
+      <Link href="/signup" className="w-full sm:w-auto">
+        <Button size="lg" className="w-full sm:w-auto h-10 px-6 rounded-[10px] text-[14px] font-[700] shadow-sm gap-1.5">
+          Sign up <ArrowRight className="w-3.5 h-3.5" />
+        </Button>
+      </Link>
+      <Link href="/login" className="w-full sm:w-auto">
+        <Button variant="outline" size="lg" className="w-full sm:w-auto h-10 px-6 rounded-[10px] text-[14px] font-[700] border-2 border-zinc-900 dark:border-zinc-100 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 shadow-sm">
+          Log in
+        </Button>
+      </Link>
+    </div>
+  )
+}
+
+function HomeGate({ children }: { children: React.ReactNode }) {
+  // Fixed duplicate: LandingHero removed - PlatformCTA is single CTA on main page (at screenshot location)
+  // Keeps one pair on main content instead of two (LandingHero + PlatformCTA)
   return <>{children}</>
 }
 
@@ -41,12 +76,15 @@ export default function Home() {
 
 
 
-      {/* PLATFORM OVERVIEW */}
+      {/* PLATFORM OVERVIEW - with Sign up / Log in on main page as requested */}
       <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <div className="max-w-[640px]">
-          <Badge variant="outline" className="mb-3 rounded-full">Platform</Badge>
-          <h2 className="text-[24px] sm:text-[28px] font-[650] tracking-[-0.03em] leading-tight">Everything a security team needs to learn and operate.</h2>
-          <p className="mt-3 text-[14px] leading-6 text-[var(--text-2)]">Designed for professional workflows — not gamified noise. Structured learning, isolated practice, peer-reviewed research, and team management that scales to enterprise.</p>
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+          <div className="max-w-[640px]">
+            <Badge variant="outline" className="mb-3 rounded-full">Platform</Badge>
+            <h2 className="text-[24px] sm:text-[28px] font-[650] tracking-[-0.03em] leading-tight">Everything a security team needs to learn and operate.</h2>
+            <p className="mt-3 text-[14px] leading-6 text-[var(--text-2)]">Designed for professional workflows — not gamified noise. Structured learning, isolated practice, peer-reviewed research, and team management that scales to enterprise.</p>
+          </div>
+          <PlatformCTA />
         </div>
 
         <Stagger className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -1,5 +1,9 @@
 "use client"
 import * as React from "react"
+import { sanitizeInput, sanitizeEmail } from "@/lib/sanitize"
+// SECURITY NOTICE: This provider currently uses localStorage for demo only.
+// In production, replace with httpOnly Secure cookies (see src/lib/auth-security.ts).
+// Never trust localStorage for authorization — server must validate JWT on every request.
 
 export type AegisUser = {
   email: string
@@ -20,12 +24,15 @@ type AuthContextType = {
 const AuthContext = React.createContext<AuthContextType | null>(null)
 
 function deriveName(email?: string, explicitName?: string): string {
-  if (explicitName?.trim()) return explicitName.trim()
+  if (explicitName?.trim()) {
+    const sanitized = sanitizeInput(explicitName, 64)
+    if (sanitized) return sanitized
+  }
   if (!email) return "Notva Laka"
   const local = email.split("@")[0] || ""
   const parts = local.split(/[._-]+/).filter(Boolean)
   if (parts.length === 0) return "User"
-  return parts.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")
+  return sanitizeInput(parts.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" "), 64)
 }
 
 function normalizePlan(raw: string | null): AegisUser["plan"] {
@@ -81,8 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const prevUserRaw = localStorage.getItem("aegis_user")
       let prevUser: AegisUser | null = null
       try { prevUser = prevUserRaw ? JSON.parse(prevUserRaw) : null } catch {}
-      const finalEmail = (email?.trim() || prevUser?.email || localStorage.getItem("aegis_email") || "").trim() || "user@aegis.local"
-      const finalName = deriveName(finalEmail, name || prevUser?.name)
+      // Sanitize email — validate format, fallback to safe default
+      const rawEmail = (email?.trim() || prevUser?.email || localStorage.getItem("aegis_email") || "").trim() || "user@aegis.local"
+      const sanitizedEmail = sanitizeEmail(rawEmail) || "user@aegis.local"
+      const finalEmail = sanitizedEmail
+      const finalName = deriveName(finalEmail, name ? sanitizeInput(name, 64) : prevUser?.name)
       const plan = prevUser?.plan || existingPlan || "free"
       const createdAt = prevUser?.createdAt || new Date().toISOString()
       const next: AegisUser = { email: finalEmail, name: finalName, plan, createdAt, provider: "email" }
@@ -95,7 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoggedIn(true)
     } catch {
       localStorage.setItem("aegis_auth", "1")
-      if (email) localStorage.setItem("aegis_email", email)
+      if (email) {
+        const safe = sanitizeEmail(email) || "user@aegis.local"
+        localStorage.setItem("aegis_email", safe)
+      }
       setIsLoggedIn(true)
     }
   }, [])
@@ -107,8 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let prevUser: AegisUser | null = null
       try { prevUser = prevUserRaw ? JSON.parse(prevUserRaw) : null } catch {}
       const legacyEmail = localStorage.getItem("aegis_email")
-      const email = prevUser?.email || legacyEmail || "user@aegis.local"
-      const name = prevUser?.name || deriveName(email)
+      const rawEmail = prevUser?.email || legacyEmail || "user@aegis.local"
+      const email = sanitizeEmail(rawEmail) || "user@aegis.local"
+      const name = prevUser?.name ? sanitizeInput(prevUser.name, 64) : deriveName(email)
       const plan = prevUser?.plan || existingPlan || "free"
       const createdAt = prevUser?.createdAt || new Date().toISOString()
       const next: AegisUser = { email, name, plan, createdAt, provider: "google" }

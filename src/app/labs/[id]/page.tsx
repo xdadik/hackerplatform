@@ -6,7 +6,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { ArrowLeft, Clock, Target, Terminal, StickyNote, Flag, RotateCcw, AlertTriangle, CheckCircle2, Play, Shield, FileText, ChevronRight, Lock } from "lucide-react"
+import { ArrowLeft, Clock, Target, Terminal, StickyNote, Flag, RotateCcw, AlertTriangle, CheckCircle2, Play, Shield, FileText, ChevronRight, Lock, Send } from "lucide-react"
+import { sanitizeInput } from "@/lib/sanitize"
+import { flagLimiter } from "@/lib/rate-limit"
 
 const labData: Record<string, any> = {
   "lab-1": { title: "SQL Injection Fundamentals", category: "Web Security", diff: "Beginner", time: "45 min", progress: 72 },
@@ -20,6 +22,13 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
   const { id } = React.use(params as any) as { id: string }
   const lab = labData[id] || labData["default"]
   const [isPaid, setIsPaid] = React.useState(false)
+  const [progress, setProgress] = React.useState(lab.progress)
+  const [notes, setNotes] = React.useState("- tried ' OR 1=1--, got 500\n- ORDER BY 3 works, 4 fails -> 3 columns\n- union select null,null,null -> need to check")
+  const [flag, setFlag] = React.useState("")
+  const [flagMsg, setFlagMsg] = React.useState<string | null>(null)
+  const [hintRevealed, setHintRevealed] = React.useState(false)
+  const [reportOpen, setReportOpen] = React.useState(false)
+  const [reportText, setReportText] = React.useState("")
   React.useEffect(() => {
     try {
       const rawUser = localStorage.getItem("aegis_user")
@@ -32,7 +41,77 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
     const plan = localStorage.getItem("aegis_plan")
     const auth = localStorage.getItem("aegis_auth")
     setIsPaid(!!auth && (plan === "go" || plan === "plus"))
-  }, [])
+    try {
+      const savedNotes = localStorage.getItem(`aegis_lab_notes_${id}`)
+      if (savedNotes) setNotes(savedNotes)
+      const savedProgress = localStorage.getItem(`aegis_lab_progress_${id}`)
+      if (savedProgress) setProgress(parseInt(savedProgress))
+      const hint = localStorage.getItem(`aegis_lab_hint3_${id}`)
+      if (hint === "1") setHintRevealed(true)
+    } catch {}
+  }, [id])
+  React.useEffect(()=>{ try{ localStorage.setItem(`aegis_lab_notes_${id}`, notes)}catch{}},[notes, id])
+  React.useEffect(()=>{ try{ localStorage.setItem(`aegis_lab_progress_${id}`, String(progress))}catch{}},[progress, id])
+
+  const handleReset = () => {
+    if(!isPaid){ alert("Upgrade to reset labs"); return}
+    if(confirm("Reset this lab? Clears progress and notes from localStorage.")){
+      setProgress(0); setFlag(""); setFlagMsg(null)
+      try{ localStorage.removeItem(`aegis_lab_progress_${id}`); localStorage.removeItem(`aegis_lab_hint3_${id}`)}catch{}
+      alert("Lab reset — progress cleared (localStorage).")
+    }
+  }
+  const handleReport = () => setReportOpen(v=>!v)
+  const submitReport = () => {
+    if(!reportText.trim()) return alert("Describe issue")
+    try{
+      const prev=JSON.parse(localStorage.getItem("aegis_reports")||"[]")
+      prev.push({id:Date.now().toString(), text:reportText, lab:id, at:new Date().toISOString()})
+      localStorage.setItem("aegis_reports", JSON.stringify(prev))
+    }catch{}
+    alert("Report submitted (localStorage aegis_reports)")
+    setReportText(""); setReportOpen(false)
+  }
+  const handleStart = () => {
+    if(!isPaid) return
+    const n = progress>0 ? progress : 10
+    setProgress(n)
+    alert(progress>0 ? "Resumed lab — workspace ready. Progress saved locally." : "Lab started! Progress 10% — complete objectives to advance.")
+    try{ document.querySelector('[data-workspace]')?.scrollIntoView({behavior:"smooth"}) }catch{}
+  }
+  const handleOpenNewTab = () => {
+    alert("Opening isolated lab in new tab (mock) — container at 10.10.14.2. In production this would proxy to K8s env.")
+    try{ window.open(`/labs/${id}`, "_blank")}catch{}
+  }
+  const handleSubmitFlag = () => {
+    const rl = flagLimiter.check(id)
+    if (rl.limited) return setFlagMsg(`Rate limited: try again in ${Math.ceil(rl.resetMs/1000)}s (5/min) — server enforces same`)
+    const cleanFlag = sanitizeInput(flag, 200).trim()
+    if(!cleanFlag) return setFlagMsg("Enter flag (format: flag{...} or aegis{...})")
+    flagLimiter.record(id)
+    const ok = /^(aegis|flag)\{.+\}$/i.test(cleanFlag) || cleanFlag.toLowerCase().includes("admin")
+    if(ok){
+      setProgress(100)
+      setFlagMsg("✅ Correct! Lab completed — 120 XP awarded (mock). Progress saved to localStorage.")
+      try{
+        const raw=localStorage.getItem("aegis_progress")
+        let p={pct:0, completed:0, total:32}
+        if(raw) try{ p=JSON.parse(raw)}catch{}
+        p.completed=Math.min(p.total, (p.completed||0)+1)
+        p.pct=Math.round((p.completed/p.total)*100)
+        localStorage.setItem("aegis_progress", JSON.stringify(p))
+      }catch{}
+    } else {
+      setFlagMsg("❌ Incorrect flag. Try UNION SELECT payload — check notes. 5 attempts/min rate limit (mock).")
+    }
+  }
+  const handleRevealHint = () => {
+    if(confirm("Reveal Hint 3? 50 XP penalty (mock).")){
+      setHintRevealed(true)
+      try{ localStorage.setItem(`aegis_lab_hint3_${id}`,"1")}catch{}
+    }
+  }
+
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1280px]">
@@ -52,31 +131,38 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
             <p className="mt-1 text-[13.5px] text-[var(--text-2)] max-w-[640px]">Learn to identify and exploit SQL injection vulnerabilities in a controlled environment. Isolated container, dedicated network, resettable.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" className="h-8"><RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset</Button>
-            <Button variant="secondary" size="sm" className="h-8"><AlertTriangle className="w-3.5 h-3.5 mr-1" /> Report issue</Button>
+            <Button variant="secondary" size="sm" className="h-8" onClick={handleReset}><RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset</Button>
+            <Button variant="secondary" size="sm" className="h-8" onClick={handleReport}><AlertTriangle className="w-3.5 h-3.5 mr-1" /> Report issue</Button>
             {!isPaid ? (
               <Link href="/settings/billing"><Button size="sm" className="h-8 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock</Button></Link>
             ) : (
-              <Button size="sm" className="h-8"><Play className="w-3.5 h-3.5 mr-1" /> {lab.progress>0?"Resume":"Start"} lab</Button>
+              <Button size="sm" className="h-8" onClick={handleStart}><Play className="w-3.5 h-3.5 mr-1" /> {progress>0?"Resume":"Start"} lab</Button>
             )}
           </div>
         </div>
+        {reportOpen && (
+          <Card className="mb-4"><CardContent className="p-4 flex gap-2">
+            <input value={reportText} onChange={e=>setReportText(e.target.value)} placeholder="Describe issue..." className="flex-1 h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px]" />
+            <Button size="sm" className="h-9" onClick={submitReport}><Send className="w-3.5 h-3.5 mr-1" /> Send</Button>
+            <Button size="sm" variant="ghost" className="h-9" onClick={()=>setReportOpen(false)}>Cancel</Button>
+          </CardContent></Card>
+        )}
 
         <div className="grid lg:grid-cols-[280px_1fr_300px] gap-4">
           {/* Left: Objectives */}
           <div className="space-y-4">
             <Card>
               <CardContent className="p-4">
-                <div className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mb-3">Objectives • {lab.progress}%</div>
+                <div className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mb-3">Objectives • {progress}%</div>
                 <div className="h-1.5 bg-[var(--surface-3)] rounded-full overflow-hidden mb-4">
-                  <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: `${lab.progress}%` }} />
+                  <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: `${progress}%` }} />
                 </div>
                 <div className="space-y-2">
-                  <Obj done label="Identify injection point" desc="Find vulnerable parameter via error response" />
-                  <Obj done label="Enumerate database" desc="Determine DB type and version" />
-                  <Obj active label="Extract user table" desc="UNION SELECT — 3 columns, 5 rows remaining" />
-                  <Obj label="Bypass authentication" desc="Use injection to login as admin" />
-                  <Obj label="Write remediation" desc="Submit report with fix recommendation" />
+                  <Obj done={progress>=20} label="Identify injection point" desc="Find vulnerable parameter via error response" />
+                  <Obj done={progress>=40} label="Enumerate database" desc="Determine DB type and version" />
+                  <Obj active={progress>=40 && progress<80} done={progress>=80} label="Extract user table" desc="UNION SELECT — 3 columns, 5 rows remaining" />
+                  <Obj done={progress>=100} label="Bypass authentication" desc="Use injection to login as admin" />
+                  <Obj done={progress>=100} label="Write remediation" desc="Submit report with fix recommendation" />
                 </div>
                 <div className="mt-4 p-2.5 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)]">
                   <div className="text-[11px] font-semibold">Prerequisites</div>
@@ -95,13 +181,13 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">Status</span><span className="text-emerald-600 font-medium flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Running</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">Region</span><span>us-east-1 • isolated</span></div>
                 </div>
-                <Button variant="secondary" size="sm" className="w-full mt-3 h-7 text-[12px]">Open in new tab</Button>
+                <Button variant="secondary" size="sm" className="w-full mt-3 h-7 text-[12px]" onClick={handleOpenNewTab}>Open in new tab</Button>
               </CardContent>
             </Card>
           </div>
 
           {/* Center: Workspace */}
-          <div className="space-y-4 min-w-0">
+          <div className="space-y-4 min-w-0" data-workspace>
             <Tabs defaultValue="workspace">
               <TabsList>
                 <TabsTrigger value="workspace">Workspace</TabsTrigger>
@@ -132,14 +218,15 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
                     </div>
                     <div className="mt-4 pt-3 border-t border-zinc-800 grid grid-cols-3 gap-2 font-sans">
                       <div className="rounded bg-zinc-900 border border-zinc-800 p-2"><div className="text-[10px] tracking-widest uppercase text-zinc-500">Hint</div><div className="text-[12px] text-amber-300">2/3 used</div></div>
-                      <div className="rounded bg-zinc-900 border border-zinc-800 p-2"><div className="text-[10px] tracking-widest uppercase text-zinc-500">Progress</div><div className="text-[12px] text-white">72%</div></div>
+                      <div className="rounded bg-zinc-900 border border-zinc-800 p-2"><div className="text-[10px] tracking-widest uppercase text-zinc-500">Progress</div><div className="text-[12px] text-white">{progress}%</div></div>
                       <div className="rounded bg-zinc-900 border border-zinc-800 p-2"><div className="text-[10px] tracking-widest uppercase text-zinc-500">Submit</div><div className="text-[11px] text-emerald-400 font-mono">flag{"{...}"}</div></div>
                     </div>
                   </div>
                   <div className="p-3 bg-[var(--surface-2)] border-t border-[var(--border)] flex gap-2">
-                    <input placeholder="Enter flag or answer..." className="flex-1 h-8 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
-                    <Button size="sm" className="h-8">Submit</Button>
+                    <input value={flag} onChange={e=>setFlag(e.target.value)} placeholder="Enter flag or answer..." className="flex-1 h-8 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+                    <Button size="sm" className="h-8" onClick={handleSubmitFlag}>Submit</Button>
                   </div>
+                  {flagMsg && <div className="px-3 pb-3 text-[12px] leading-5" style={{color: flagMsg.includes("✅") ? "#059669" : "#DC2626"}}>{flagMsg}</div>}
                 </Card>
 
                 <Card className="mt-4">
@@ -158,9 +245,7 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
                 <Card><CardContent className="p-5 prose prose-sm max-w-none dark:prose-invert"><h3 className="text-[14px] font-[650]">Guide</h3><p className="text-[13px] leading-6 text-[var(--text-2)]">1. Identify injection via error or boolean. 2. Determine column count via ORDER BY. 3. Use UNION SELECT to extract data. 4. Bypass auth with payload. 5. Document fix: parameterized queries.</p><pre className="bg-[#0F1012] text-zinc-300 p-3 rounded-[8px] text-[11px] font-mono overflow-auto">SELECT * FROM users WHERE id = &#39;1&apos; UNION SELECT null,null--</pre></CardContent></Card>
               </TabsContent>
               <TabsContent value="notes">
-                <Card><CardContent className="p-5"><textarea placeholder="Private notes — saved automatically, per-lab, not shared..." className="w-full min-h-[180px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" defaultValue="- tried ' OR 1=1--, got 500
-- ORDER BY 3 works, 4 fails -> 3 columns
-- union select null,null,null -> need to check" /><div className="mt-2 text-[11px] text-[var(--text-3)]">Auto-saved • Markdown supported • Private to you</div></CardContent></Card>
+                <Card><CardContent className="p-5"><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Private notes — saved automatically, per-lab, not shared..." className="w-full min-h-[180px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" /><div className="mt-2 text-[11px] text-[var(--text-3)]">Auto-saved to localStorage (aegis_lab_notes_{id}) • Markdown supported • Private to you</div><div className="mt-3 flex gap-2"><Button size="sm" className="h-8" onClick={()=>alert("Notes saved to localStorage")}>Save notes</Button><Button size="sm" variant="ghost" className="h-8" onClick={()=>{ setNotes(""); try{ localStorage.removeItem(`aegis_lab_notes_${id}`)}catch{}}}>Clear</Button></div></CardContent></Card>
               </TabsContent>
             </Tabs>
           </div>
@@ -184,7 +269,7 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
                   </div>
                   <div className="p-2.5 rounded-[8px] bg-[var(--surface-2)] border border-dashed border-[var(--border)]">
                     <div className="text-[11px] font-semibold text-[var(--text-2)]">Hint 3 — 50 XP penalty</div>
-                    <Button size="sm" variant="secondary" className="w-full mt-2 h-7 text-[11px]">Reveal hint</Button>
+                    {hintRevealed ? <div className="mt-2 text-[11px] text-[var(--text-2)] p-2 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200">Payload: <code className="font-mono">&apos; UNION SELECT sql,null FROM sqlite_master--</code></div> : <Button size="sm" variant="secondary" className="w-full mt-2 h-7 text-[11px]" onClick={handleRevealHint}>Reveal hint</Button>}
                   </div>
                 </div>
               </CardContent>
@@ -194,12 +279,12 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
               <CardContent className="p-4">
                 <div className="text-[12px] font-semibold flex items-center gap-2"><StickyNote className="w-3.5 h-3.5" /> Notes & progress</div>
                 <div className="mt-3 space-y-2 text-[12px]">
-                  <div className="flex justify-between"><span className="text-[var(--text-2)]">Progress</span><span className="font-mono">72%</span></div>
-                  <div className="h-1.5 bg-[var(--surface-3)] rounded-full overflow-hidden"><div className="h-full bg-[var(--accent)] w-[72%]" /></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-2)]">Progress</span><span className="font-mono">{progress}%</span></div>
+                  <div className="h-1.5 bg-[var(--surface-3)] rounded-full overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{width:`${progress}%`}} /></div>
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">Time</span><span className="font-mono">31:42 remaining</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">XP</span><span className="font-mono">+120 on completion</span></div>
                 </div>
-                <Button variant="secondary" size="sm" className="w-full mt-3 h-7 text-[12px]"><FileText className="w-3 h-3 mr-1" /> View certificate</Button>
+                <Button variant="secondary" size="sm" className="w-full mt-3 h-7 text-[12px]" onClick={()=>alert("Certificate: complete lab to 100% to generate PDF (mock). Stored in localStorage).")}><FileText className="w-3 h-3 mr-1" /> View certificate</Button>
               </CardContent>
             </Card>
 

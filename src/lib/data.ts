@@ -73,15 +73,6 @@ export const skillProgress = [
   { name: "Reverse Engineering", level: "Beginner", progress: 12, next: "Intermediate" },
 ]
 
-// Real-user note: leaderboard below is mock data for local development.
-// It will be replaced by GET /api/users after the backend ships.
-// Leaderboard is sorted by real reputation (descending); rank is computed server-side — do not hard-code rank in UI.
-export const leaderboard = [
-  { rank: 1, username: "sophiachen", reputation: 9842, labs: 142, challenges: 89, avatar: "SC" },
-  { rank: 2, username: "marcusreid", reputation: 9210, labs: 138, challenges: 92, avatar: "MR" },
-  { rank: 3, username: "alexmorgan", reputation: 8841, labs: 124, challenges: 76, avatar: "AM" },
-  { rank: 4, username: "priya_n", reputation: 8623, labs: 118, challenges: 81, avatar: "PN" },
-  { rank: 5, username: "james.k", reputation: 8433, labs: 112, challenges: 74, avatar: "JK" },
-  { rank: 6, username: "elenav", reputation: 8211, labs: 109, challenges: 69, avatar: "EV" },
-  { rank: 7, username: "davidpark", reputation: 8023, labs: 102, challenges: 71, avatar: "DP" },
-].sort((a, b) => b.reputation - a.reputation).map((row, i) => ({ ...row, rank: i + 1 }))
+// Demo accounts deleted — leaderboard now empty, real users will populate via API/localStorage.
+// Previous mock data (sophiachen, marcusreid, etc.) removed per product-ready cleanup.
+export const leaderboard: { rank: number; username: string; reputation: number; labs: number; challenges: number; avatar: string }[] = []

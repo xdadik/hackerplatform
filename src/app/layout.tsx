@@ -37,6 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {children}
           </AuthProvider>
         </ThemeProvider>
+        {/* dangerouslySetInnerHTML is safe here: static inline script, no user input, no XSS vector. CSP in next.config.ts allows 'unsafe-inline' for this. Alternative is next/script. */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
             try {

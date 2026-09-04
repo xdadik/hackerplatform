@@ -90,13 +90,13 @@ export function TopNav({ onMenuToggle, mobileOpen: externalOpen }: { onMenuToggl
             </>
           )}
 
-          {!isLoggedIn && (
-            <div className="hidden sm:flex items-center gap-2 pl-3 ml-2 border-l border-[var(--border)]">
+          {!isLoggedIn && pathname !== "/" && (
+            <div className="flex items-center gap-2 pl-3 ml-2 border-l border-[var(--border)]">
               <Link href="/login">
-                <Button variant="ghost" size="sm" className="h-8 px-3 rounded-[8px] font-[500]">Log in</Button>
+                <Button variant="outline" size="sm" className="h-8 px-4 sm:px-5 rounded-[8px] font-[700] border-2 border-zinc-900 dark:border-zinc-100 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800">Log in</Button>
               </Link>
               <Link href="/signup">
-                <Button size="sm" className="h-8 px-4 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-800 font-[500]">Sign up</Button>
+                <Button size="sm" className="h-8 px-4 sm:px-5 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-800 font-[650] shadow-sm">Sign up</Button>
               </Link>
             </div>
           )}

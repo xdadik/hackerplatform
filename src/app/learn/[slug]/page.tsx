@@ -103,6 +103,27 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
     setCompleted(true)
   }
 
+  // Next / Previous video logic
+  const currentIndex = React.useMemo(() => data.lessons.findIndex((l: any) => l.title === activeLesson), [data.lessons, activeLesson])
+  const hasNext = currentIndex >= 0 && currentIndex < data.lessons.length - 1
+  const hasPrev = currentIndex > 0
+  const nextLesson = hasNext ? data.lessons[currentIndex + 1] : null
+  const prevLesson = hasPrev ? data.lessons[currentIndex - 1] : null
+  const goNext = () => {
+    if (nextLesson) {
+      setActiveLesson(nextLesson.title)
+      setCompleted(false)
+      try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {}
+    }
+  }
+  const goPrev = () => {
+    if (prevLesson) {
+      setActiveLesson(prevLesson.title)
+      setCompleted(false)
+      try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {}
+    }
+  }
+
   return (
     <AppShell withSidebar>
       <div className="flex min-h-[calc(100vh-56px)] bg-[var(--background)] -m-6 lg:-m-8 p-6 lg:p-8">
@@ -113,11 +134,59 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
             <span className="text-[var(--text-3)]">/</span>
             <span className="text-[var(--text)]">{data.title}</span>
           </div>
-          <h1 className="text-[24px] font-[700] tracking-[-0.03em] text-[var(--text)]">{data.title}</h1>
+          <h1 className="text-[24px] font-[700] tracking-[-0.03em] text-[var(--text)]">{activeLesson || data.title}</h1>
+          <p className="mt-1 text-[12px] text-[var(--text-3)]">{data.title} • {data.lessons[currentIndex]?.subtitle || data.breadcrumb} • Lesson {currentIndex >=0 ? currentIndex+1 : 1} of {data.lessons.length}</p>
           <p className="mt-2 text-[13px] text-[var(--text-2)]">This lesson covers the foundations of cybersecurity — threats, attack surfaces, defense principles, and why this field matters.</p>
           <div className="mt-6">
-            <VideoPlayer src="/videos/cybersecurity-101-intro.mp4" onEnd={handleVideoEnd} />
+            <VideoPlayer key={activeLesson} src="/videos/cybersecurity-101-intro.mp4" onEnd={handleVideoEnd} />
           </div>
+          {/* Next / Previous controls */}
+          <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!hasPrev}
+              onClick={goPrev}
+              className="h-9 gap-1.5 justify-center border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] disabled:opacity-40"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" /> Previous
+            </Button>
+            <div className="hidden sm:flex flex-col items-center">
+              <span className="text-[11px] tracking-widest uppercase text-[var(--text-3)]">Up next</span>
+              <span className="text-[12px] font-[600] text-[var(--text)] truncate max-w-[220px]">{hasNext ? nextLesson!.title : "No more lessons"}</span>
+            </div>
+            <Button
+              disabled={!hasNext}
+              onClick={goNext}
+              className="h-9 gap-1.5 justify-center bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 disabled:opacity-40"
+            >
+              Next video <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          {hasNext && nextLesson && (
+            <button onClick={goNext} className="mt-3 w-full flex items-center justify-between p-3 rounded-[10px] border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-left">
+              <div>
+                <div className="text-[11px] font-semibold tracking-widest uppercase text-blue-700 dark:text-blue-300">Next up</div>
+                <div className="text-[13px] font-[600] text-blue-900 dark:text-blue-100">{nextLesson.title} • {nextLesson.subtitle}</div>
+                <div className="text-[11px] text-blue-700/70 dark:text-blue-300/70">{nextLesson.time}</div>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center shrink-0">
+                <Play className="w-4 h-4 fill-white" />
+              </div>
+            </button>
+          )}
+          {!hasNext && (
+            <div className="mt-3 p-4 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] shadow-sm text-center">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="mt-3 text-[14px] font-[700] tracking-[-0.02em] text-[var(--text)]">You finished this path 🎉</div>
+              <div className="mt-1 text-[12.5px] text-[var(--text-2)]">Great work — pick your next challenge and keep the streak going.</div>
+              <Link href="/learn" className="mt-3 inline-flex items-center justify-center h-9 px-5 rounded-full bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 text-[13px] font-[600] shadow-sm">
+                Browse other paths <ChevronRight className="w-4 h-4 ml-1" />
+              </Link>
+            </div>
+          )}
           {completed && (
             <div className="mt-3 flex items-center gap-2 text-[13px] text-emerald-600 dark:text-emerald-400 font-[500]">
               <CheckCircle2 className="w-4 h-4" />
@@ -130,8 +199,9 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
             </div>
           )}
           <div className="mt-4 flex items-center gap-3 text-[12px] text-[var(--text-2)]">
-            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> 10:34</span>
+            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {data.lessons[currentIndex]?.time || "10:34"}</span>
             <span className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Video lesson</span>
+            <span className="ml-auto text-[11px] font-mono text-[var(--text-3)]">{currentIndex >=0 ? currentIndex+1 : 1} / {data.lessons.length}</span>
           </div>
           <div className="mt-6 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-5">
             <h3 className="text-[13px] font-[600] text-[var(--text)]">What you will learn</h3>

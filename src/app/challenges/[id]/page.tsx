@@ -1,12 +1,62 @@
+"use client"
 import Link from "next/link"
+import * as React from "react"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Trophy, Clock, Users, Flag, Bookmark, Share2, AlertTriangle, CheckCircle2, Terminal, Code2 } from "lucide-react"
+import { ArrowLeft, Trophy, Clock, Users, Flag, Bookmark, Share2, AlertTriangle, CheckCircle2, Terminal, Code2, Download } from "lucide-react"
+import { sanitizeInput } from "@/lib/sanitize"
+import { flagLimiter } from "@/lib/rate-limit"
 
-export default async function ChallengeDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default function ChallengeDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = (React as any).use(params) as { id: string }
+  const [bookmarked, setBookmarked] = React.useState(false)
+  const [flag, setFlag] = React.useState("")
+  const [msg, setMsg] = React.useState<string|null>(null)
+  const [solved, setSolved] = React.useState(false)
+  React.useEffect(()=>{
+    try{
+      const raw=localStorage.getItem("aegis_bookmarks")
+      if(raw){ const s=new Set(JSON.parse(raw)); setBookmarked(s.has(id)) }
+      const sol=localStorage.getItem(`aegis_solved_${id}`)
+      if(sol==="1") setSolved(true)
+    }catch{}
+  },[id])
+  const toggleBookmark=()=>{
+    const next=!bookmarked
+    setBookmarked(next)
+    try{
+      const raw=localStorage.getItem("aegis_bookmarks")
+      const set=new Set(raw?JSON.parse(raw):[])
+      if(next) (set as Set<string>).add(id); else (set as Set<string>).delete(id)
+      localStorage.setItem("aegis_bookmarks", JSON.stringify([...set]))
+    }catch{}
+  }
+  const handleShare=async()=>{
+    const url=typeof window!=="undefined"? window.location.href : ""
+    try{
+      if(navigator.clipboard) await navigator.clipboard.writeText(url)
+      alert("Link copied to clipboard: "+url)
+    }catch{ alert("Share: "+url) }
+    try{ if((navigator as any).share) (navigator as any).share({title:"Challenge "+id, url})}catch{}
+  }
+  const handleDownload=(name:string)=>{
+    const blob=new Blob([`mock file for ${name} — challenge ${id}\n`],{type:"text/plain"})
+    const url=URL.createObjectURL(blob)
+    const a=document.createElement("a"); a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url)
+  }
+  const submitFlag=()=>{
+    const rl = flagLimiter.check(id)
+    if (rl.limited) return setMsg(`Rate limited: try again in ${Math.ceil(rl.resetMs/1000)}s (5/min)`)
+    const clean = sanitizeInput(flag, 200).trim()
+    if(!clean) return setMsg("Enter flag (aegis{...})")
+    flagLimiter.record(id)
+    const ok=/^aegis\{.+\}$/i.test(clean) || /^flag\{.+\}$/i.test(clean)
+    if(ok){ setSolved(true); setMsg("✅ Correct! Challenge solved — points awarded (mock). Saved to localStorage."); try{ localStorage.setItem(`aegis_solved_${id}`,"1")}catch{} }
+    else setMsg("❌ Incorrect flag. Try again. 5 attempts/min (mock).")
+  }
+
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1080px]">
@@ -29,9 +79,9 @@ export default async function ChallengeDetail({ params }: { params: Promise<{ id
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" className="h-8"><Bookmark className="w-3.5 h-3.5 mr-1" /> Bookmark</Button>
-            <Button variant="secondary" size="sm" className="h-8"><Share2 className="w-3.5 h-3.5 mr-1" /> Share</Button>
-            <Button size="sm" className="h-8"><Flag className="w-3.5 h-3.5 mr-1" /> Submit flag</Button>
+            <Button variant={bookmarked?"default":"secondary"} size="sm" className="h-8" onClick={toggleBookmark}><Bookmark className={`w-3.5 h-3.5 mr-1 ${bookmarked?"fill-current":""}`} /> {bookmarked?"Bookmarked":"Bookmark"}</Button>
+            <Button variant="secondary" size="sm" className="h-8" onClick={handleShare}><Share2 className="w-3.5 h-3.5 mr-1" /> Share</Button>
+            <Button size="sm" className="h-8" onClick={()=>document.getElementById("flag-input")?.scrollIntoView({behavior:"smooth"})}><Flag className="w-3.5 h-3.5 mr-1" /> Submit flag</Button>
           </div>
         </div>
 
@@ -41,14 +91,16 @@ export default async function ChallengeDetail({ params }: { params: Promise<{ id
               <CardContent className="p-5">
                 <div className="text-[12px] font-semibold flex items-center gap-2"><Code2 className="w-3.5 h-3.5" /> Provided files</div>
                 <div className="mt-3 grid sm:grid-cols-2 gap-2">
-                  <a href="#" className="p-3 rounded-[10px] border border-[var(--border)] hover:bg-[var(--surface-2)] flex items-center gap-3 transition-colors">
+                  <button onClick={()=>handleDownload("heap101")} className="p-3 rounded-[10px] border border-[var(--border)] hover:bg-[var(--surface-2)] flex items-center gap-3 transition-colors text-left w-full">
                     <div className="w-8 h-8 rounded-[8px] bg-[#0F1012] text-zinc-300 flex items-center justify-center font-mono text-[11px] border border-zinc-800">ELF</div>
                     <div><div className="text-[12.5px] font-medium">heap101</div><div className="text-[11px] text-[var(--text-3)]">64-bit • 18 KB • SHA256: a3f...</div></div>
-                  </a>
-                  <a href="#" className="p-3 rounded-[10px] border border-[var(--border)] hover:bg-[var(--surface-2)] flex items-center gap-3 transition-colors">
+                    <Download className="w-3.5 h-3.5 ml-auto text-[var(--text-3)]" />
+                  </button>
+                  <button onClick={()=>handleDownload("heap101.c")} className="p-3 rounded-[10px] border border-[var(--border)] hover:bg-[var(--surface-2)] flex items-center gap-3 transition-colors text-left w-full">
                     <div className="w-8 h-8 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center"><Terminal className="w-4 h-4 text-[var(--text-2)]" /></div>
                     <div><div className="text-[12.5px] font-medium">heap101.c</div><div className="text-[11px] text-[var(--text-3)]">Source • 89 lines</div></div>
-                  </a>
+                    <Download className="w-3.5 h-3.5 ml-auto text-[var(--text-3)]" />
+                  </button>
                 </div>
                 <div className="mt-4 rounded-[10px] bg-[#0F1012] border border-zinc-800 p-3 font-mono text-[12px] leading-5 text-zinc-300 overflow-auto">
                   <div className="text-zinc-500">$ checksec heap101</div>
@@ -58,10 +110,12 @@ export default async function ChallengeDetail({ params }: { params: Promise<{ id
                   <div>{'> '} <span className="w-2 h-4 bg-zinc-500 inline-block animate-pulse align-middle" /></div>
                 </div>
                 <div className="mt-4 flex items-center gap-2">
-                  <input placeholder="aegis{...}" className="flex-1 h-8 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
-                  <Button size="sm" className="h-8">Submit</Button>
+                  <input id="flag-input" value={flag} onChange={e=>setFlag(e.target.value)} placeholder="aegis{...}" className="flex-1 h-8 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+                  <Button size="sm" className="h-8" onClick={submitFlag}>Submit</Button>
                 </div>
+                {msg && <div className={`mt-2 text-[12px] ${msg.includes("✅")?"text-emerald-600":"text-red-600"}`}>{msg}</div>}
                 <div className="mt-2 text-[11px] text-[var(--text-3)]">Server validates flag server-side. 5 attempts/min. Instances are per-user and isolated.</div>
+                {solved && <div className="mt-3 p-3 rounded-[8px] bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-[12px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Solved — writeup unlocked!</div>}
               </CardContent>
             </Card>
 
@@ -81,6 +135,7 @@ export default async function ChallengeDetail({ params }: { params: Promise<{ id
                     </div>
                   </div>
                 </div>
+                <Button variant="secondary" size="sm" className="mt-3 h-7" onClick={()=>alert("Discussion: writeups hidden until solved. Join team channel or ask in community.")}>Open discussion</Button>
               </CardContent>
             </Card>
           </div>
@@ -94,9 +149,9 @@ export default async function ChallengeDetail({ params }: { params: Promise<{ id
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">Solves</span><span className="font-mono">892</span></div>
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">Difficulty</span><Badge variant="secondary" className="text-[11px]">Medium</Badge></div>
                   <div className="flex justify-between"><span className="text-[var(--text-2)]">Author</span><span className="font-medium">marcusreid</span></div>
-                  <div className="flex justify-between"><span className="text-[var(--text-2)]">Status</span><span className="flex items-center gap-1 text-amber-600"><Clock className="w-3 h-3" /> Not solved</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-2)]">Status</span><span className={`flex items-center gap-1 ${solved?"text-emerald-600":"text-amber-600"}`}>{solved? <><CheckCircle2 className="w-3 h-3" /> Solved</> : <><Clock className="w-3 h-3" /> Not solved</>}</span></div>
                 </div>
-                <Button variant="secondary" size="sm" className="w-full mt-3 h-7 text-[12px]">View scoreboard</Button>
+                <Link href="/events"><Button variant="secondary" size="sm" className="w-full mt-3 h-7 text-[12px]">View scoreboard</Button></Link>
               </CardContent>
             </Card>
 
@@ -122,6 +177,7 @@ export default async function ChallengeDetail({ params }: { params: Promise<{ id
               <CardContent className="p-4 text-center">
                 <div className="text-[12px] font-semibold flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Solve to unlock</div>
                 <div className="text-[11px] text-[var(--text-2)] mt-1">Writeup, flag format, and author notes after solving.</div>
+                <Button size="sm" variant="secondary" className="mt-3 h-7" onClick={()=> solved ? alert("Writeup: tcache poisoning via UAF — see research section") : alert("Solve first to unlock writeup.")}>{solved ? "View writeup" : "Locked"}</Button>
               </CardContent>
             </Card>
           </div>

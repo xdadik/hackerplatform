@@ -305,11 +305,7 @@ export default function DashboardPage() {
                       <span className="text-[11px] text-[var(--text-3)]">Red Team — Atlas</span>
                     </div>
                   </div>
-                  <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] text-center">
-                    <div className="text-[12px] font-medium">SOC Simulation — Feb 22</div>
-                    <div className="text-[11px] text-[var(--text-2)]">Live detection engineering workshop</div>
-                    <Button size="sm" variant="secondary" className="mt-2 h-7 text-[12px]">Reserve seat</Button>
-                  </div>
+                  <UpcomingReserveCard />
                 </CardContent>
               </Card>
             </FadeIn>
@@ -427,6 +423,23 @@ function Stat({ label, value, sub, accent, prefix = "" }: { label: string, value
   )
 }
 
+function UpcomingReserveCard(){
+  const [reserved,setReserved]=React.useState(false)
+  React.useEffect(()=>{ try{ setReserved(localStorage.getItem("aegis_event_soc_reserved")==="1")}catch{}},[])
+  const toggle=()=>{
+    const n=!reserved
+    setReserved(n)
+    try{ localStorage.setItem("aegis_event_soc_reserved", n?"1":"0")}catch{}
+  }
+  return (
+    <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] text-center">
+      <div className="text-[12px] font-medium">SOC Simulation — Feb 22</div>
+      <div className="text-[11px] text-[var(--text-2)]">Live detection engineering workshop {reserved && <span className="text-emerald-600">• Reserved</span>}</div>
+      <Button size="sm" variant={reserved?"default":"secondary"} className="mt-2 h-7 text-[12px]" onClick={toggle}>{reserved?"✓ Reserved — Cancel?":"Reserve seat"}</Button>
+    </div>
+  )
+}
+
 function ChevronLink() {
-  return <span className="w-7 h-7 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" /></span>
+  return <Link href="/labs/sql-injection" className="w-7 h-7 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" /></Link>
 }

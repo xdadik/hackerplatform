@@ -1,4 +1,6 @@
+"use client"
 import Link from "next/link"
+import * as React from "react"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,7 +10,21 @@ import { leaderboard } from "@/lib/data"
 import { Stagger, FadeIn, CountUp } from "@/components/ui/stagger"
 import { Trophy, TrendingUp, Crown } from "lucide-react"
 
+// If leaderboard empty (clean state), show mock fallback for UI
+const demoFallback = [
+  { rank:1, username:"sophiachen", reputation:12400, labs:80, challenges:120, avatar:"SC" },
+  { rank:2, username:"marcusreid", reputation:11000, labs:70, challenges:100, avatar:"MR" },
+  { rank:3, username:"alexmorgan", reputation:8841, labs:64, challenges:76, avatar:"AM" },
+  { rank:4, username:"priya_n", reputation:8200, labs:60, challenges:70, avatar:"PN" },
+  { rank:5, username:"elenav", reputation:7900, labs:58, challenges:68, avatar:"EV" },
+]
 export default function LeaderboardPage() {
+  const [activeTab, setActiveTab] = React.useState("global")
+  const [page, setPage] = React.useState(1)
+  const data = leaderboard.length>0 ? leaderboard : demoFallback
+  const perPage=5
+  const totalPages=Math.max(1, Math.ceil((data.length-3)/perPage))
+  const paged=data.filter(r=>r.rank>3).slice((page-1)*perPage, page*perPage)
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1080px]">
@@ -18,11 +34,11 @@ export default function LeaderboardPage() {
               <h1 className="text-[22px] font-[650] tracking-[-0.03em]">Leaderboard</h1>
               <p className="mt-1 text-[13.5px] text-[var(--text-2)]">Global rankings based on reputation — labs, challenges, research, and community contributions.</p>
             </div>
-            <Badge variant="secondary" className="rounded-full">Season 2026 • Week 7</Badge>
+            <Badge variant="secondary" className="rounded-full">Season 2026 • Week 7 • Page {page}/{totalPages}</Badge>
           </div>
         </FadeIn>
 
-        <Tabs defaultValue="global">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="global">Global</TabsTrigger>
             <TabsTrigger value="labs">Labs</TabsTrigger>
@@ -35,9 +51,9 @@ export default function LeaderboardPage() {
             {/* Podium */}
             <Stagger className="grid grid-cols-3 gap-3 mb-6 mt-4">
               {[
-                { rank: 2, user: leaderboard[1], height: "pt-8" },
-                { rank: 1, user: leaderboard[0], height: "pt-4", crown: true },
-                { rank: 3, user: leaderboard[2], height: "pt-12" },
+                { rank: 2, user: data[1], height: "pt-8" },
+                { rank: 1, user: data[0], height: "pt-4", crown: true },
+                { rank: 3, user: data[2], height: "pt-12" },
               ].map(p => (
                 <div key={p.rank} className="stagger-item"><Card className={`${p.rank === 1 ? "border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 dark:border-amber-900" : ""}`}>
                   <CardContent className={`p-4 text-center ${p.height}`}>
@@ -76,10 +92,12 @@ export default function LeaderboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--border)]">
-                        {leaderboard.map(row => (
+                        {paged.length===0 ? (
+                          <tr><td colSpan={6} className="px-4 py-6 text-center text-[12px] text-[var(--text-2)]">No more rankings — page {page} empty</td></tr>
+                        ) : paged.map(row => (
                           <tr key={row.rank} className={`hover:bg-[var(--surface-2)] transition-colors ${row.username === "alexmorgan" ? "bg-[var(--accent-muted)]" : ""}`} aria-current={row.username === "alexmorgan" ? "true" : undefined}>
                             <td className="px-4 py-3">
-                              <span className={`inline-flex w-6 h-6 rounded-full items-center justify-center text-[11px] font-bold border ${row.rank <=3 ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-2)]"}`} aria-label={`Rank ${row.rank}`}>
+                              <span className="inline-flex w-6 h-6 rounded-full items-center justify-center text-[11px] font-bold border bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-2)]" aria-label={`Rank ${row.rank}`}>
                                 {row.rank}
                               </span>
                             </td>
@@ -104,10 +122,10 @@ export default function LeaderboardPage() {
                     </table>
                   </div>
                   <div className="px-4 py-3 border-t border-[var(--border)] flex items-center justify-between text-[12px]">
-                    <span className="text-[var(--text-3)]">You are ranked #3 globally • Top 0.2%</span>
+                    <span className="text-[var(--text-3)]">Page {page} of {totalPages} • {data.length} total</span>
                     <div className="flex gap-1">
-                      <Button variant="secondary" size="sm" className="h-7" aria-label="Previous page">Previous</Button>
-                      <Button variant="secondary" size="sm" className="h-7" aria-label="Next page">Next</Button>
+                      <Button variant="secondary" size="sm" className="h-7" aria-label="Previous page" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>Previous</Button>
+                      <Button variant="secondary" size="sm" className="h-7" aria-label="Next page" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next</Button>
                     </div>
                   </div>
                 </CardContent>

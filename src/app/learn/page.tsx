@@ -1,4 +1,6 @@
+"use client"
 import Link from "next/link"
+import * as React from "react"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -6,9 +8,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { learningPaths } from "@/lib/data"
 import { Stagger, FadeIn, ProgressAnimated } from "@/components/ui/stagger"
-import { Search, GraduationCap, ChevronRight, Filter } from "lucide-react"
+import { Search, GraduationCap, ChevronRight, Filter, X } from "lucide-react"
 
 export default function LearnPage() {
+  const [q,setQ]=React.useState("")
+  const [levelFilter,setLevelFilter]=React.useState("All")
+  const filtered=React.useMemo(()=>{
+    return learningPaths.filter(p=>{
+      if(levelFilter!=="All" && p.level!==levelFilter) return false
+      if(q.trim()){
+        const s=q.toLowerCase()
+        return p.name.toLowerCase().includes(s) || p.level.toLowerCase().includes(s)
+      }
+      return true
+    })
+  },[q,levelFilter])
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1080px]">
@@ -21,22 +35,27 @@ export default function LearnPage() {
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" />
-                <Input placeholder="Search courses, lessons..." className="pl-8 h-8 w-[220px] sm:w-[260px] bg-[var(--surface)]" />
+                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, lessons..." className="pl-8 h-8 w-[220px] sm:w-[260px] bg-[var(--surface)]" />
+                {q && <button onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
               </div>
-              <Button variant="secondary" size="sm" className="h-8"><Filter className="w-3.5 h-3.5 mr-1" /> Filters</Button>
+              <div className="flex items-center gap-1 p-1 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)]">
+                {["All","Beginner","Intermediate","Advanced"].map(l=>(
+                  <button key={l} onClick={()=>setLevelFilter(l)} className={`px-2.5 py-1 rounded-[6px] text-[12px] font-[500] ${levelFilter===l ? "bg-[var(--surface)] border border-[var(--border)] shadow-sm" : "text-[var(--text-2)]"}`}>{l}</button>
+                ))}
+              </div>
             </div>
           </div>
         </FadeIn>
 
         {/* Paths grid */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[14px] font-[650] tracking-[-0.02em]">Courses</h2>
-          <span className="text-[12px] text-[var(--text-3)]">{learningPaths.length} courses</span>
+          <h2 className="text-[14px] font-[650] tracking-[-0.02em]">Courses — {filtered.length} of {learningPaths.length}</h2>
+          <span className="text-[12px] text-[var(--text-3)]">{levelFilter!=="All" ? `Level: ${levelFilter}` : "All levels"} {q && `• search: "${q}"`}</span>
         </div>
 
         <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {learningPaths.map(path => (
-            <div key={path.id} className="stagger-item"><Card className="group hover:shadow-md hover:-translate-y-[1px] transition-all">
+          {filtered.map(path => (
+            <div key={path.id} className="stagger-item"><Card className="group hover:shadow-md hover:-translate-y-[1px] transition-all h-full">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="w-9 h-9 rounded-[9px] border border-[var(--border)] flex items-center justify-center bg-[var(--surface-2)] group-hover:bg-[var(--text)] group-hover:text-[var(--background)] transition-colors">
@@ -59,6 +78,9 @@ export default function LearnPage() {
               </CardContent>
             </Card></div>
           ))}
+          {filtered.length===0 && (
+            <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center col-span-full"><div className="text-[13px] font-[600]">No courses match</div><div className="text-[12px] text-[var(--text-2)]">Try different search or level filter.</div><Button size="sm" className="mt-3 h-7" onClick={()=>{setQ(""); setLevelFilter("All")}}>Clear filters</Button></CardContent></Card>
+          )}
         </Stagger>
 
         {/* Skill progression */}
