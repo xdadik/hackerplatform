@@ -21,14 +21,8 @@ $newsFile = DATA_DIR . '/news.json';
 
 // init empty files if missing
 if (!file_exists($usersFile)) file_put_contents($usersFile, json_encode([], JSON_PRETTY_PRINT));
-if (!file_exists($eventsFile)) file_put_contents($eventsFile, json_encode([
-  ["id"=>1,"title"=>"Winter CTF 2026","type"=>"CTF","date"=>"2026-01-15","status"=>"Live","participants"=>342],
-  ["id"=>2,"title"=>"SOC Simulation — Feb 22","type"=>"Workshop","date"=>"2026-02-22","status"=>"Upcoming","participants"=>48],
-], JSON_PRETTY_PRINT));
-if (!file_exists($newsFile)) file_put_contents($newsFile, json_encode([
-  ["id"=>1,"title"=>"Abusing Overly Permissive IAM Trust Policies","author"=>"Sophia Chen","tags"=>"aws,iam","views"=>3421,"status"=>"Published"],
-  ["id"=>2,"title"=>"Heap Feng Shui in glibc 2.39","author"=>"Marcus Reid","tags"=>"pwn,heap","views"=>1823,"status"=>"Published"],
-], JSON_PRETTY_PRINT));
+if (!file_exists($eventsFile)) file_put_contents($eventsFile, json_encode([], JSON_PRETTY_PRINT));
+if (!file_exists($newsFile)) file_put_contents($newsFile, json_encode([], JSON_PRETTY_PRINT));
 
 function loadJson($file){ $c=file_get_contents($file); $d=json_decode($c,true); return is_array($d)?$d:[];}
 function saveJson($file,$data){ file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)); }

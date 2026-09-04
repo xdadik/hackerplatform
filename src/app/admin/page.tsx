@@ -106,12 +106,7 @@ export default function AdminPage() {
     if (typeof window !== "undefined") {
       try { const s = localStorage.getItem("aegis_admin_videos"); if (s) return JSON.parse(s) } catch {}
     }
-    return [
-      { id: "v1", title: "What is Cybersecurity?", subtitle: "Lesson 1.1", duration: "10:34", module: "Cybersecurity 101", path: "cybersecurity-101", featured: true },
-      { id: "v2", title: "OSI & TCP/IP", subtitle: "Lesson 1.1", duration: "08:12", module: "Networking", path: "networking", featured: false },
-      { id: "v3", title: "Recon", subtitle: "Lesson 3.1", duration: "06:02", module: "Recon", path: "linux", featured: false },
-      { id: "v4", title: "SQL Injection Fundamentals", subtitle: "Lab 1", duration: "45:00", module: "Web Security", path: "web-security", featured: true },
-    ]
+    return []
   })
   const [editingVideo, setEditingVideo] = React.useState<AdminVideo | null>(null)
   const [showAddVideo, setShowAddVideo] = React.useState(false)
@@ -121,11 +116,7 @@ export default function AdminPage() {
     if (typeof window !== "undefined") {
       try { const s = localStorage.getItem("aegis_admin_events"); if (s) return JSON.parse(s) } catch {}
     }
-    return [
-      { id: "e1", title: "Winter CTF 2026", type: "CTF", date: "2026-01-15", status: "Live", participants: 342 },
-      { id: "e2", title: "SOC Simulation — Feb 22", type: "Workshop", date: "2026-02-22", status: "Upcoming", participants: 48 },
-      { id: "e3", title: "Spring Challenge Sprint", type: "Competition", date: "2026-03-10", status: "Upcoming", participants: 120 },
-    ]
+    return []
   })
   const [editingEvent, setEditingEvent] = React.useState<AdminEvent | null>(null)
   const [showAddEvent, setShowAddEvent] = React.useState(false)
@@ -135,11 +126,7 @@ export default function AdminPage() {
     if (typeof window !== "undefined") {
       try { const s = localStorage.getItem("aegis_admin_news"); if (s) return JSON.parse(s) } catch {}
     }
-    return [
-      { id: "n1", title: "Abusing Overly Permissive IAM Trust Policies", excerpt: "We analyze 1,200 real trust policies...", author: "Sophia Chen", tags: "aws,iam", views: 3421, status: "Published" },
-      { id: "n2", title: "Heap Feng Shui in glibc 2.39", excerpt: "Reproducible exploit for tcache poisoning...", author: "Marcus Reid", tags: "pwn,heap", views: 1823, status: "Published" },
-      { id: "n3", title: "Volatility 3: Hunting Cobalt Strike", excerpt: "Workflow for extracting beacon configuration...", author: "Elena V.", tags: "forensics,volatility", views: 921, status: "Pending" },
-    ]
+    return []
   })
   const [editingNews, setEditingNews] = React.useState<AdminNews | null>(null)
   const [showAddNews, setShowAddNews] = React.useState(false)
@@ -149,10 +136,7 @@ export default function AdminPage() {
     if (typeof window !== "undefined") {
       try { const s = localStorage.getItem("aegis_admin_cves"); if (s) return JSON.parse(s) } catch {}
     }
-    return [
-      { id: "c1", cveId: "CVE-2026-1234", title: "SQL Injection in Aegis Auth Module", severity: "Critical", status: "Published", publishDate: "2026-01-10" },
-      { id: "c2", cveId: "CVE-2026-5678", title: "XSS in Research Comments", severity: "High", status: "Draft", publishDate: "2026-02-01" },
-    ]
+    return []
   })
   const [editingCVE, setEditingCVE] = React.useState<AdminCVE | null>(null)
   const [showAddCVE, setShowAddCVE] = React.useState(false)
@@ -161,11 +145,7 @@ export default function AdminPage() {
   type AdminLab = { id: string; title: string; category: string; difficulty: "Beginner"|"Intermediate"|"Advanced"; duration: string }
   const [adminLabs, setAdminLabs] = React.useState<AdminLab[]>(()=>{
     if(typeof window!=="undefined"){ try{ const s=localStorage.getItem("aegis_admin_labs"); if(s) return JSON.parse(s)}catch{}}
-    return [
-      { id:"l1", title:"SQL Injection Fundamentals", category:"Web Security", difficulty:"Beginner", duration:"45 min"},
-      { id:"l2", title:"Active Directory Enumeration", category:"Active Directory", difficulty:"Advanced", duration:"120 min"},
-      { id:"l3", title:"Linux Privilege Escalation", category:"Linux", difficulty:"Intermediate", duration:"90 min"},
-    ]
+    return []
   })
   const [showAddLab, setShowAddLab] = React.useState(false)
   const [editingLab, setEditingLab] = React.useState<AdminLab|null>(null)
