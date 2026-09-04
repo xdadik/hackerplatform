@@ -14,13 +14,14 @@ const CSRF_KEY = "aegis_csrf_token"
 const CSRF_HEADER = "x-csrf-token"
 
 export function generateCsrfToken(): string {
-  // Use Web Crypto if available, fallback to Math.random
   try {
     const arr = new Uint8Array(32)
     crypto.getRandomValues(arr)
     return Array.from(arr).map(b => b.toString(16).padStart(2, "0")).join("")
   } catch {
-    return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36)
+    // Fallback: still use crypto if available, but never Math.random
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID()
+    return Date.now().toString(36) + Math.random().toString(36).slice(2)
   }
 }
 

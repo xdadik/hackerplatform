@@ -33,6 +33,16 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# backup files
+*.bak
+*.bak.*
+*.swp
+*.swo
+*~
+
+# php
+/data/*.json
+
 # vercel
 .vercel
 

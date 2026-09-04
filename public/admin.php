@@ -1,12 +1,16 @@
 <?php
+ini_set('session.cookie_secure', '1');
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Strict');
+ini_set('session.use_strict_mode', '1');
 session_start();
 
 // --- CONFIG ---
 // SECURITY: In production, load these from environment variables (.env), not hardcoded.
 // define('ADMIN_USER', getenv('ADMIN_USER') ?: 'admin');
 // define('ADMIN_PASS', getenv('ADMIN_PASS') ?: '');
-define('ADMIN_USER', 'admin');
-define('ADMIN_PASS', 'control2026$?>luz'); // real admin pass — move to env var in production
+define('ADMIN_USER', getenv('ADMIN_USER') ?: 'admin');
+define('ADMIN_PASS', getenv('ADMIN_PASS') ?: ''); // must be set via env var
 define('DATA_DIR', __DIR__ . '/../data');
 define('VIDEO_DIR', __DIR__ . '/videos');
 
@@ -63,7 +67,7 @@ if(empty($_SESSION['csrf'])) $_SESSION['csrf']=bin2hex(random_bytes(32));
 function csrfValid(){ return isset($_POST['csrf']) && hash_equals($_SESSION['csrf'], $_POST['csrf']); }
 
 // --- AUTH ---
-if (isset($_GET['logout'])) { session_destroy(); header("Location: admin.php"); exit; }
+if (isset($_POST['logout']) && csrfValid()) { session_destroy(); header("Location: admin.php"); exit; }
 
 if (isset($_POST['login'])) {
   $ip=$_SERVER['REMOTE_ADDR']??'127.0.0.1';
@@ -89,10 +93,8 @@ if (isset($_POST['login'])) {
 }
 
 if (!isset($_SESSION['admin_logged'])) {
-  header("X-Frame-Options: DENY");
-  header("X-Content-Type-Options: nosniff");
-  header("Referrer-Policy: strict-origin-when-cross-origin");
-  header("Content-Security-Policy: default-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; img-src 'self' data:;");
+  // Login page CSP — no unsafe-inline for scripts
+  header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.tailwindcss.com; img-src 'self' data:;", false);
   ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -116,11 +118,18 @@ if (!isset($_SESSION['admin_logged'])) {
 </body></html>
 <?php exit; }
 
+// Security headers for admin panel (before any output)
+header("X-Frame-Options: DENY");
+header("X-Content-Type-Options: nosniff");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+header("Strict-Transport-Security: max-age=63072000; includeSubDomains; preload");
+header("Content-Security-Policy: default-src 'self' https://cdn.tailwindcss.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com data:;");
+
 // Security headers for admin panel
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
-header("Content-Security-Policy: default-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; img-src 'self' data:;");
+header("Strict-Transport-Security: max-age=63072000; includeSubDomains; preload");
 
 // --- ACTIONS when logged in (CSRF protected) ---
 $msg = "";
@@ -182,10 +191,11 @@ if (isset($_POST['upload_video']) && isset($_FILES['video'])) {
     else {
       $dest = VIDEO_DIR . '/' . time() . '_' . $name;
       if(move_uploaded_file($f['tmp_name'], $dest)){
-        $msg="Video uploaded: ".htmlspecialchars(basename($dest));
+        if(filesize($dest) > 500*1024*1024){ unlink($dest); $msg="File too large after upload (>500MB)"; }
+        else $msg="Video uploaded: ".htmlspecialchars(basename($dest));
       } else $msg="Upload failed (permissions)";
     }
-  } else $msg="Upload error: invalid type/size ".htmlspecialchars($f['type']??'');
+    } else $msg="Upload error: invalid type or size";
 }
 if (isset($_POST['delete_video'])) {
   $v = basename($_POST['delete_video']);
@@ -218,25 +228,24 @@ if(!in_array($tab,$allowed)) $tab='overview';
   <div class="max-w-[1280px] mx-auto px-4 sm:px-6 h-[56px] flex items-center justify-between gap-4">
     <div class="flex items-center gap-3">
       <div class="w-8 h-8 rounded-[8px] bg-zinc-900 text-white flex items-center justify-center text-[12px] font-bold">A</div>
-      <div><div class="text-[14px] font-bold leading-none">Aegis Admin</div><div class="text-[11px] text-zinc-500">admin.php • Product Ready • CSRF+RBAC+RateLimit</div></div>
+      <div><div class="text-[14px] font-bold leading-none">Aegis Admin</div><div class="text-[11px] text-zinc-500">Aegis Platform — Admin Panel</div></div>
       <span class="hidden sm:inline-flex ml-3 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-medium">● System operational • headers enforced</span>
     </div>
     <div class="flex items-center gap-2">
       <span class="hidden sm:inline text-[12px] text-zinc-600"><?=htmlspecialchars($_SESSION['admin_user'])?> • Admin</span>
-      <a href="admin.php?logout=1" class="h-8 px-4 rounded-[8px] border border-zinc-300 bg-white hover:bg-zinc-50 text-[13px] font-medium">Log out</a>
+      <form method="post" class="inline"><input type="hidden" name="csrf" value="<?=htmlspecialchars($_SESSION['csrf'])?>"><button name="logout" value="1" class="h-8 px-4 rounded-[8px] border border-zinc-300 bg-white hover:bg-zinc-50 text-[13px] font-medium">Log out</button></form>
     </div>
   </div>
 </header>
 
-<div class="max-w-[1280px] mx-auto px-4 sm:px-6 py-6">
+    <div class="max-w-[1280px] mx-auto px-4 sm:px-6 py-6">
   <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
     <div>
       <h1 class="text-[22px] font-bold tracking-tight">Admin Control Panel</h1>
-      <p class="text-[13.5px] text-zinc-500">Manage users, videos, events, news — whole platform via admin.php. htmlspecialchars, CSRF tokens, rate limit, RBAC, secure headers, file validation active.</p>
     </div>
     <div class="flex items-center gap-2">
-      <a href="/" class="h-8 px-3 rounded-[8px] border border-zinc-200 bg-white text-[13px] font-medium hover:bg-zinc-50">← Back to site</a>
-      <a href="/admin" class="h-8 px-3 rounded-[8px] bg-zinc-900 text-white text-[13px] font-medium hover:bg-zinc-800">Next.js Admin (RBAC)</a>
+      <a href="/" class="h-8 px-3 rounded-[8px] border border-zinc-200 bg-white text-[13px] font-medium hover:bg-zinc-50">Back to site</a>
+      <form method="post" class="inline"><input type="hidden" name="csrf" value="<?=htmlspecialchars($_SESSION['csrf'])?>"><button name="logout" value="1" class="h-8 px-4 rounded-[8px] border border-zinc-300 bg-white hover:bg-zinc-50 text-[13px] font-medium">Log out</button></form>
     </div>
   </div>
 
@@ -244,7 +253,7 @@ if(!in_array($tab,$allowed)) $tab='overview';
 
   <div class="flex flex-wrap gap-1.5 mb-6">
     <?php foreach($allowed as $t): $active=$tab===$t; ?>
-      <a href="?tab=<?=$t?>" class="px-4 py-2 rounded-full text-[13px] font-medium border <?= $active ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'?>"><?=htmlspecialchars(ucfirst($t))?></a>
+      <a href="?tab=<?=htmlspecialchars($t, ENT_QUOTES)?>" class="px-4 py-2 rounded-full text-[13px] font-medium border <?= $active ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'?>"><?=htmlspecialchars(ucfirst($t))?></a>
     <?php endforeach; ?>
     <span class="ml-auto hidden sm:inline-flex items-center gap-2 text-[12px] text-zinc-500"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> <?=count($users)?> users • <?=count($videos)?> videos • <?=count($events)?> events</span>
   </div>
@@ -380,7 +389,7 @@ if(!in_array($tab,$allowed)) $tab='overview';
       <div class="mt-3 space-y-3">
         <div><label class="text-[12px] font-medium">Announcement</label><input placeholder="Enter announcement..." class="mt-1 w-full h-9 rounded-[8px] border border-zinc-300 px-3 text-[13px]" value="<?=htmlspecialchars($_SESSION['announcement'] ?? '')?>"></div>
         <button class="w-full h-8 rounded-[8px] bg-zinc-900 text-white text-[13px] font-medium">Save Settings</button>
-        <div class="text-[11px] text-zinc-500 pt-2 border-t">RBAC, rate limiting, CSP, secure headers enforced. Lab isolation: containers/K8s ready. See docs/SECURITY_FIXES.md</div>
+        <div class="text-[11px] text-zinc-500 pt-2 border-t">Lab isolation: containers/K8s ready.</div>
       </div>
     </div>
     <div class="bg-white border border-zinc-200 rounded-[12px] p-5">
@@ -392,7 +401,7 @@ if(!in_array($tab,$allowed)) $tab='overview';
         <div class="flex justify-between"><span>Rate limit</span><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px]">5/15min</span></div>
         <div class="flex justify-between"><span>Secure headers</span><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px]">CSP/HSTS</span></div>
         <div class="flex justify-between"><span>File validation</span><span class="text-emerald-700 text-[11px]">mp4/webm/ogg, 500MB, sanitized</span></div>
-        <div class="flex justify-between"><span>Admin login</span><span class="px-2 py-0.5 rounded-full bg-zinc-900 text-white text-[11px]">admin / env var in prod</span></div>
+        <div class="flex justify-between"><span>Admin login</span><span class="px-2 py-0.5 rounded-full bg-zinc-900 text-white text-[11px]">Secure</span></div>
       </div>
     </div>
   </div>

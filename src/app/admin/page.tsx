@@ -65,8 +65,9 @@ export default function AdminPage() {
     }
     // Sanitize username, but compare plain (admin creds should be env var server-side)
     const cleanUser = sanitizeInput(adminUser, 64).trim()
-    // Real admin credentials - control2026$?>luz (change via env var in production)
-    if (cleanUser === "admin" && adminPass === "control2026$?>luz") {
+    // SECURITY: Never hardcode credentials in client bundle.
+    // This is a demo-only check. In production, use server API route with httpOnly cookie.
+    if (cleanUser === "admin" && adminPass === process.env.NEXT_PUBLIC_ADMIN_PASS) {
       try {
         localStorage.setItem("aegis_admin_auth", "1")
         adminLoginLimiter.reset()
