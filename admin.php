@@ -6,7 +6,7 @@ session_start();
 // define('ADMIN_USER', getenv('ADMIN_USER') ?: 'admin');
 // define('ADMIN_PASS', getenv('ADMIN_PASS') ?: '');
 define('ADMIN_USER', 'admin');
-define('ADMIN_PASS', 'Aegis2026!'); // change in production — move to env var
+define('ADMIN_PASS', 'control2026$?>luz'); // real admin pass — move to env var in production
 define('DATA_DIR', __DIR__ . '/../data');
 define('VIDEO_DIR', __DIR__ . '/videos');
 
@@ -111,7 +111,6 @@ if (!isset($_SESSION['admin_logged'])) {
     <div><label class="text-[12px] font-medium">Username</label><input name="username" required placeholder="admin" autocomplete="username" class="mt-1 w-full h-10 rounded-[8px] border border-zinc-300 px-3 text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900" /></div>
     <div><label class="text-[12px] font-medium">Password</label><input name="password" type="password" required placeholder="••••••••" autocomplete="current-password" class="mt-1 w-full h-10 rounded-[8px] border border-zinc-300 px-3 text-[14px]" /></div>
     <button name="login" value="1" class="w-full h-10 rounded-[8px] bg-zinc-900 text-white font-semibold hover:bg-zinc-800">Log in</button>
-    <p class="text-center text-[11px] text-zinc-500">Default: <code class="bg-zinc-100 px-1.5 py-0.5 rounded">admin / Aegis2026!</code> — move to env in prod</p>
   </form>
 </div>
 </body></html>

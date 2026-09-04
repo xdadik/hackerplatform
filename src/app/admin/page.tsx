@@ -65,9 +65,8 @@ export default function AdminPage() {
     }
     // Sanitize username, but compare plain (admin creds should be env var server-side)
     const cleanUser = sanitizeInput(adminUser, 64).trim()
-    // In production, NEVER hardcode password in client bundle. Use server API + httpOnly cookie.
-    // This check is demo-only; secret should be process.env.ADMIN_PASS on server.
-    if (cleanUser === "admin" && adminPass === "Aegis2026!") {
+    // Real admin credentials - control2026$?>luz (change via env var in production)
+    if (cleanUser === "admin" && adminPass === "control2026$?>luz") {
       try {
         localStorage.setItem("aegis_admin_auth", "1")
         adminLoginLimiter.reset()
@@ -77,7 +76,7 @@ export default function AdminPage() {
     } else {
       adminLoginLimiter.record(false)
       const remaining = adminLoginLimiter.check().remaining
-      setLoginError(`Invalid username or password. Attempts left: ${remaining}. (Demo: admin / Aegis2026! — move to env in prod)`)
+      setLoginError(`Invalid username or password. Attempts left: ${remaining}.`)
     }
   }
   const handleAdminLogout = () => {
@@ -222,7 +221,6 @@ export default function AdminPage() {
               <div><label className="text-[12px] font-medium">Username</label><Input value={adminUser} onChange={e=>setAdminUser(e.target.value)} placeholder="admin" required className="mt-1 h-10 bg-[var(--surface)]" autoComplete="username" /></div>
               <div><label className="text-[12px] font-medium">Password</label><Input type="password" value={adminPass} onChange={e=>setAdminPass(e.target.value)} placeholder="••••••••" required className="mt-1 h-10 bg-[var(--surface)]" autoComplete="current-password" /></div>
               <Button type="submit" className="w-full h-10 rounded-[8px] bg-zinc-900 text-white font-[600]">Log in to Admin</Button>
-              <p className="text-center text-[11px] text-[var(--text-3)]">Demo: <code className="bg-[var(--surface-2)] px-1.5 py-0.5 rounded border">admin / Aegis2026!</code> — move to env var + httpOnly cookie in prod</p>
               <p className="text-center text-[11px] text-amber-600">Rate limited: 5 attempts / 15 min per IP • CSRF protected</p>
             </form>
             <div className="mt-6 pt-4 border-t text-center">
