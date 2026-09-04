@@ -5,10 +5,7 @@ ini_set('session.cookie_samesite', 'Strict');
 ini_set('session.use_strict_mode', '1');
 session_start();
 
-// --- CONFIG ---
-// SECURITY: In production, load these from environment variables (.env), not hardcoded.
-// define('ADMIN_USER', getenv('ADMIN_USER') ?: 'admin');
-// define('ADMIN_PASS', getenv('ADMIN_PASS') ?: '');
+// config
 define('ADMIN_USER', getenv('ADMIN_USER') ?: 'admin');
 define('ADMIN_PASS', getenv('ADMIN_PASS') ?: ''); // must be set via env var
 define('DATA_DIR', __DIR__ . '/../data');
@@ -22,7 +19,7 @@ $usersFile = DATA_DIR . '/users.json';
 $eventsFile = DATA_DIR . '/events.json';
 $newsFile = DATA_DIR . '/news.json';
 
-// Init files if missing — demo accounts deleted, starts empty (product-ready)
+// init empty files if missing
 if (!file_exists($usersFile)) file_put_contents($usersFile, json_encode([], JSON_PRETTY_PRINT));
 if (!file_exists($eventsFile)) file_put_contents($eventsFile, json_encode([
   ["id"=>1,"title"=>"Winter CTF 2026","type"=>"CTF","date"=>"2026-01-15","status"=>"Live","participants"=>342],
@@ -40,7 +37,7 @@ $users = loadJson($usersFile);
 $events = loadJson($eventsFile);
 $news = loadJson($newsFile);
 
-// --- RATE LIMITING (5 attempts per 15 min per IP) ---
+// rate limiting
 define('ATTEMPTS_FILE', DATA_DIR . '/admin_attempts.json');
 function getAttempts($ip){
   if(!file_exists(ATTEMPTS_FILE)) return [];
@@ -62,11 +59,11 @@ function isRateLimited($ip){
   return count($a)>=5;
 }
 
-// --- CSRF ---
+// csrf
 if(empty($_SESSION['csrf'])) $_SESSION['csrf']=bin2hex(random_bytes(32));
 function csrfValid(){ return isset($_POST['csrf']) && hash_equals($_SESSION['csrf'], $_POST['csrf']); }
 
-// --- AUTH ---
+// auth
 if (isset($_POST['logout']) && csrfValid()) { session_destroy(); header("Location: admin.php"); exit; }
 
 if (isset($_POST['login'])) {
@@ -131,7 +128,7 @@ header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 header("Strict-Transport-Security: max-age=63072000; includeSubDomains; preload");
 
-// --- ACTIONS when logged in (CSRF protected) ---
+// actions
 $msg = "";
 if ($_SERVER['REQUEST_METHOD']==='POST' && !csrfValid()) {
   $msg="Security error: CSRF validation failed";

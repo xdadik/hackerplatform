@@ -1,7 +1,7 @@
 # Security Audit & Fixes — Hack Platform (Aegis)
 
 **Date:** 2026-09-04
-**Auditor:** OpenCode (Muse Spark)
+**Auditor:** Internal
 **Scope:** `C:\Users\xdadi\OneDrive\Documents\Hack platform` — Next.js 16 App Router + PHP `admin.php`
 
 ---
@@ -126,7 +126,7 @@ PHP `admin.php` fix:
 - `.gitignore` correctly ignores `.env*` but no `.env.example` or note.
 
 **Fix:**
-- Added warning comments in both files: “In production, load from environment variables — never client bundle. Use `process.env.ADMIN_PASS` on server route.”
+- Added warning comments in both files: “load from env vars — never client bundle. Use `process.env.ADMIN_PASS` on server route.”
 - `admin/page.tsx` now shows “Demo: admin / Aegis2026! — move to env var + httpOnly cookie in prod” instead of plain hint.
 - `.gitignore:34` already has `.env*` — documented in this file.
 - PHP `admin.php` fixed to suggest `getenv('ADMIN_PASS')` and keeps constant only for demo.
@@ -279,7 +279,7 @@ All new files (`sanitize.ts`, `csrf.ts`, `rate-limit.ts`, `auth-security.ts`, `n
 
 ---
 
-## Remaining TODO (Post-Backend)
+## Next steps
 
 - [ ] Replace `localStorage` auth with httpOnly cookies + FastAPI JWT (see `docs/backend-architecture.md §8`).
 - [ ] Add `middleware.ts` to protect `/admin`, `/labs/*`, `/settings/billing`.

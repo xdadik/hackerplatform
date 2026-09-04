@@ -50,7 +50,7 @@ export default function OrganizationsPage() {
                     <Input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Work email" className="h-9 bg-[var(--surface)]" />
                     <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Tell us about your team size and needs..." className="w-full min-h-[80px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-3 text-[13px]" />
                     <Button size="sm" className="h-8 gap-1.5 w-full" onClick={handleContact} disabled={sent}><Send className="w-3.5 h-3.5" /> {sent ? "✓ Sent — we'll reach out!" : "Send request"}</Button>
-                    <div className="text-[11px] text-[var(--text-3)]">Saved to localStorage (aegis_org_leads). In production, this emails sales.</div>
+                    <div className="text-[11px] text-[var(--text-3)]">saved locally — emails sales in prod.</div>
                   </div>
                 )}
               </div>

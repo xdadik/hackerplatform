@@ -1,8 +1,4 @@
-/**
- * Client-side rate limiting — defense-in-depth for login, flag submit, comments.
- * Server must enforce authoritative limits (PHP admin.php does 5/15min, FastAPI will do Redis).
- * This prevents brute-force UI abuse and gives immediate UX feedback.
- */
+// client rate limit
 
 type AttemptMap = Record<string, number[]>
 
@@ -25,16 +21,8 @@ function saveAttempts(key: string, arr: number[]): void {
   try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(arr)) } catch {}
 }
 
-/**
- * Check if action is rate limited.
- * @param key e.g. "login", "flag_challenge123"
- * @param max max attempts
- * @param windowMs window in ms
- * @returns { limited: boolean, remaining: number, resetMs: number }
- */
 export function checkRateLimit(key: string, max = 5, windowMs = 60_000): { limited: boolean; remaining: number; resetMs: number } {
   const attempts = loadAttempts(key).filter(t => now() - t < windowMs)
-  // persist pruned list
   saveAttempts(key, attempts)
   const limited = attempts.length >= max
   const remaining = Math.max(0, max - attempts.length)
@@ -45,8 +33,6 @@ export function checkRateLimit(key: string, max = 5, windowMs = 60_000): { limit
 
 export function recordAttempt(key: string, success = false): void {
   if (success) {
-    // On success, optionally clear? For login, clear on success to allow retry
-    // We keep attempts but could clear — here we keep for audit, clear only if explicitly reset
     return
   }
   const attempts = loadAttempts(key).filter(t => now() - t < 60_000 * 15)
@@ -66,11 +52,10 @@ export function formatReset(ms: number): string {
   return `${m}m`
 }
 
-// Preset limiters
 export const loginLimiter = {
   key: "login",
   max: 5,
-  windowMs: 15 * 60 * 1000, // 15 min — matches PHP
+  windowMs: 15 * 60 * 1000,
   check: () => checkRateLimit("login", 5, 15 * 60 * 1000),
   record: (success: boolean) => recordAttempt("login", success),
   reset: () => resetRateLimit("login"),

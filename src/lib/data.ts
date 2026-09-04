@@ -73,6 +73,5 @@ export const skillProgress = [
   { name: "Reverse Engineering", level: "Beginner", progress: 12, next: "Intermediate" },
 ]
 
-// Demo accounts deleted — leaderboard now empty, real users will populate via API/localStorage.
-// Previous mock data (sophiachen, marcusreid, etc.) removed per product-ready cleanup.
+// empty until api ready
 export const leaderboard: { rank: number; username: string; reputation: number; labs: number; challenges: number; avatar: string }[] = []

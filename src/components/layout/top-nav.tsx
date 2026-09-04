@@ -72,19 +72,19 @@ export function TopNav({ onMenuToggle, mobileOpen: externalOpen }: { onMenuToggl
 
         {/* Right */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="hidden sm:inline-flex h-8 w-8 text-zinc-600 dark:text-zinc-300 hover:text-[var(--text)] hover:bg-[var(--surface-2)]" aria-label="Toggle theme" onClick={toggle}>
+          <Button variant="ghost" size="icon" className="hidden sm:inline-flex h-10 w-10 sm:h-8 sm:w-8 text-zinc-600 dark:text-zinc-300 hover:text-[var(--text)] hover:bg-[var(--surface-2)]" aria-label="Toggle theme" onClick={toggle}>
             <Sun className="w-4 h-4 dark:hidden" />
             <Moon className="w-4 h-4 hidden dark:block" />
           </Button>
 
           {isLoggedIn && (
             <>
-              <Link href="/notifications" className="hidden sm:inline-flex relative p-2 rounded-[8px] hover:bg-[var(--surface-2)] text-zinc-600 dark:text-zinc-300 hover:text-[var(--text)] transition-colors">
+              <Link href="/notifications" className="inline-flex relative p-2.5 sm:p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 items-center justify-center rounded-[8px] hover:bg-[var(--surface-2)] text-zinc-600 dark:text-zinc-300 hover:text-[var(--text)] transition-colors" aria-label="Notifications">
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[var(--surface)]" />
+                <span className="absolute top-1.5 right-1.5 sm:top-1 sm:right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[var(--surface)]" />
               </Link>
 
-              <Link href="/messages" className="hidden sm:inline-flex p-2 rounded-[8px] hover:bg-[var(--surface-2)] text-zinc-600 dark:text-zinc-300 hover:text-[var(--text)] transition-colors">
+              <Link href="/messages" className="inline-flex p-2.5 sm:p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 items-center justify-center rounded-[8px] hover:bg-[var(--surface-2)] text-zinc-600 dark:text-zinc-300 hover:text-[var(--text)] transition-colors" aria-label="Messages">
                 <MessageSquare className="w-4 h-4" />
               </Link>
             </>
@@ -103,7 +103,7 @@ export function TopNav({ onMenuToggle, mobileOpen: externalOpen }: { onMenuToggl
 
           <button
             onClick={handleToggle}
-            className="lg:hidden p-2 rounded-[8px] hover:bg-[var(--surface-2)] text-[var(--text-2)]"
+            className="lg:hidden p-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-[8px] hover:bg-[var(--surface-2)] text-[var(--text-2)]"
             aria-label="Toggle menu"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -116,17 +116,27 @@ export function TopNav({ onMenuToggle, mobileOpen: externalOpen }: { onMenuToggl
         <div className="md:hidden px-4 pb-3">
           <button
             onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true })) }
-            className="w-full flex items-center gap-2 h-9 px-3 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] text-[13px] text-[var(--text-3)]"
+            className="w-full flex items-center gap-2 h-11 sm:h-9 px-3 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] text-[13px] text-[var(--text-3)]"
           >
             <Search className="w-3.5 h-3.5" /> Search labs, challenges, research...
           </button>
         </div>
       )}
 
-      {/* Mobile drawer - nav deleted, sidebar is primary */}
-      {mobileOpen && (
+      {/* Mobile drawer - sidebar is primary nav when controlled externally; this drawer only for standalone pages */}
+      {mobileOpen && externalOpen === undefined && (
         <div className="lg:hidden border-t border-[var(--border)] bg-[var(--surface)]">
           <nav className="px-2 py-3 space-y-1 max-h-[70vh] overflow-auto">
+            {isLoggedIn && (
+              <div className="space-y-1">
+                <Link href="/notifications" onClick={() => setInternalOpen(false)} className="flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-[8px] text-[13px] font-[500] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 min-h-[44px]">
+                  <Bell className="w-4 h-4" /> Notifications <span className="ml-auto w-2 h-2 bg-red-500 rounded-full" />
+                </Link>
+                <Link href="/messages" onClick={() => setInternalOpen(false)} className="flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-[8px] text-[13px] font-[500] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 min-h-[44px]">
+                  <MessageSquare className="w-4 h-4" /> Messages
+                </Link>
+              </div>
+            )}
             <div className="pt-3 mt-3 border-t border-[var(--border)] px-2 space-y-2">
               {isLoggedIn ? (
                 <div className="flex items-center gap-3 p-2 rounded-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
@@ -135,15 +145,15 @@ export function TopNav({ onMenuToggle, mobileOpen: externalOpen }: { onMenuToggl
                     <div className="text-[13px] font-[600] text-zinc-900 dark:text-white leading-none">{displayName}</div>
                     <div className="text-[11px] text-zinc-500">{displayPlan} plan</div>
                   </div>
-                  <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => { setInternalOpen(false); logout() }}>Sign out</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-[11px] min-h-[32px]" onClick={() => { setInternalOpen(false); logout() }}>Sign out</Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <Link href="/login" onClick={() => setInternalOpen(false)}><Button variant="secondary" size="sm" className="w-full h-9 rounded-[8px]">Log in</Button></Link>
-                  <Link href="/signup" onClick={() => setInternalOpen(false)}><Button size="sm" className="w-full h-9 rounded-[8px] bg-[var(--text)] text-[var(--background)]">Sign up</Button></Link>
+                  <Link href="/login" onClick={() => setInternalOpen(false)}><Button variant="secondary" size="sm" className="w-full h-11 sm:h-9 rounded-[8px]">Log in</Button></Link>
+                  <Link href="/signup" onClick={() => setInternalOpen(false)}><Button size="sm" className="w-full h-11 sm:h-9 rounded-[8px] bg-[var(--text)] text-[var(--background)]">Sign up</Button></Link>
                 </div>
               )}
-              <Button variant="ghost" size="sm" className="w-full justify-start" onClick={toggle}>
+              <Button variant="ghost" size="sm" className="w-full justify-start min-h-[44px] sm:min-h-0" onClick={toggle}>
                 <Sun className="w-4 h-4 mr-2 dark:hidden" /><Moon className="w-4 h-4 mr-2 hidden dark:block" /> Toggle theme
               </Button>
             </div>

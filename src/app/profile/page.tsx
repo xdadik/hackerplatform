@@ -87,9 +87,9 @@ export default function ProfilePage() {
                   <div className="flex-1 min-w-0">
                     {isEditing ? (
                       <div className="space-y-2">
-                        <Input value={editName} onChange={e=>setEditName(e.target.value)} placeholder="Full name" className="h-9 font-[700] text-[18px]" />
+                        <Input value={editName} onChange={e=>setEditName(e.target.value)} placeholder="Full name" className="h-11 sm:h-9 min-h-[44px] sm:min-h-0 font-[700] text-[18px]" />
                         <textarea value={editBio} onChange={e=>setEditBio(e.target.value)} placeholder="Bio" className="w-full min-h-[72px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-2 text-[13px]" />
-                        <div className="flex gap-2"><Button size="sm" className="h-8 gap-1" onClick={saveProfile}><Save className="w-3.5 h-3.5" /> Save</Button><Button size="sm" variant="ghost" className="h-8" onClick={()=>setIsEditing(false)}><X className="w-3.5 h-3.5" /> Cancel</Button></div>
+                        <div className="flex flex-col sm:flex-row gap-2"><Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 gap-1" onClick={saveProfile}><Save className="w-3.5 h-3.5" /> Save</Button><Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setIsEditing(false)}><X className="w-3.5 h-3.5" /> Cancel</Button></div>
                       </div>
                     ) : (
                       <>
@@ -106,9 +106,9 @@ export default function ProfilePage() {
                     )}
                   </div>
                   {!isEditing && (
-                    <div className="flex gap-2">
-                      <Button variant="secondary" size="sm" className="rounded-[8px]" onClick={shareProfile}>Share profile</Button>
-                      <Button size="sm" className="rounded-[8px]" onClick={()=>setIsEditing(true)}><Edit2 className="w-3.5 h-3.5 mr-1" /> Edit profile</Button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <Button variant="secondary" size="sm" className="rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto" onClick={shareProfile}>Share profile</Button>
+                      <Button size="sm" className="rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-auto" onClick={()=>setIsEditing(true)}><Edit2 className="w-3.5 h-3.5 mr-1" /> Edit profile</Button>
                     </div>
                   )}
                 </div>
@@ -125,7 +125,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <Stat label="Reputation" value="8,841" sub="Rank #3" />
               <Stat label="Labs" value="124" sub="6 in progress" />
               <Stat label="Challenges" value="76" sub="12 this month" />
@@ -186,7 +186,7 @@ export default function ProfilePage() {
                 <span className="text-[11px] text-[var(--text-3)]">124 total • 4 certificates</span>
               </CardHeader>
               <CardContent>
-                <div className="grid sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     "SQL Injection Fundamentals",
                     "Cloud IAM Misconfiguration",
@@ -268,7 +268,7 @@ export default function ProfilePage() {
                   </div>
                   <Badge variant="default" className="text-[11px]">Owner</Badge>
                 </div>
-                <Link href="/teams"><Button variant="secondary" size="sm" className="w-full mt-2 h-7">View teams</Button></Link>
+                <Link href="/teams"><Button variant="secondary" size="sm" className="w-full mt-2 h-9 sm:h-7 min-h-[36px] sm:min-h-0">View teams</Button></Link>
               </CardContent>
             </Card>
           </div>

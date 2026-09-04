@@ -52,27 +52,27 @@ export default function DashboardPage() {
               <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mr-1 hidden sm:inline shrink-0">Quick actions</span>
               <span className="hidden sm:block h-4 w-px bg-[var(--border)] mr-1 shrink-0" />
               <Link href="/labs">
-                <Button variant="secondary" size="sm" className="h-7 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <FlaskConical className="w-3.5 h-3.5" /> Labs
                 </Button>
               </Link>
               <Link href="/challenges">
-                <Button variant="secondary" size="sm" className="h-7 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <Trophy className="w-3.5 h-3.5" /> Challenges
                 </Button>
               </Link>
               <Link href="/tools">
-                <Button variant="secondary" size="sm" className="h-7 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <Wrench className="w-3.5 h-3.5" /> Tools
                 </Button>
               </Link>
               <Link href="/learn">
-                <Button variant="secondary" size="sm" className="h-7 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <BookOpen className="w-3.5 h-3.5" /> Academy
                 </Button>
               </Link>
               <Link href="/research">
-                <Button variant="secondary" size="sm" className="h-7 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                   <BookOpen className="w-3.5 h-3.5" /> Research
                 </Button>
               </Link>
@@ -82,7 +82,7 @@ export default function DashboardPage() {
         </FadeIn>
 
         {/* Stats - animated with anime.js stagger + count-up */}
-        <Stagger className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <Stagger className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
           <div className="stagger-item"><Stat label="XP" value={1240} sub="+120 this week" /></div>
           <div className="stagger-item"><Stat label="Reputation" value={8841} sub="Reputation Rank #3 • Top 1%" /></div>
           <div className="stagger-item"><Stat label="Labs completed" value={24} sub="6 in progress" /></div>
@@ -122,7 +122,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <Link href="/learn/web-security"><Button size="sm" className="shrink-0 rounded-[8px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-900 dark:border-zinc-700">Continue <ArrowRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/learn/web-security"><Button size="sm" className="shrink-0 rounded-[8px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-900 dark:border-zinc-700 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Continue <ArrowRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
                     </div>
                   </div>
 
@@ -140,7 +140,7 @@ export default function DashboardPage() {
                           <span className="text-[11px] text-[var(--text-3)]">Not started • 90 min • Next in path</span>
                         </div>
                       </div>
-                      <Link href="/labs/lab-2"><Button size="sm" variant="secondary" className="shrink-0 rounded-[8px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200">Start <ArrowRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/labs/lab-2"><Button size="sm" variant="secondary" className="shrink-0 rounded-[8px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Start <ArrowRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
                     </div>
                   </div>
                 </CardContent>
@@ -181,7 +181,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em] text-[var(--text)]">No labs in progress</div>
                         <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[320px] mx-auto">Pick a lab to start practicing. Your active labs will appear here with progress.</div>
-                        <Link href="/labs"><Button size="sm" className="mt-4 h-8 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse labs</Button></Link>
+                        <Link href="/labs"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse labs</Button></Link>
                       </CardContent>
                     </Card>
                   )}
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                   <Badge variant="secondary">{challenges.filter(c=>c.status==="solved").length} solved</Badge>
                 </CardHeader>
                 <CardContent>
-                  <Stagger className="grid sm:grid-cols-2 gap-2" selector=".stagger-item">
+                  <Stagger className="grid grid-cols-1 sm:grid-cols-2 gap-2" selector=".stagger-item">
                     {challenges.slice(0,4).map(c => (
                       <div key={c.id} className="stagger-item p-3 rounded-[10px] border border-[var(--border)] flex items-center gap-3">
                         <div className={`w-7 h-7 rounded-[7px] flex items-center justify-center shrink-0 ${c.status==="solved" ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30" : "bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-3)]"}`}>
@@ -435,11 +435,11 @@ function UpcomingReserveCard(){
     <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] text-center">
       <div className="text-[12px] font-medium">SOC Simulation — Feb 22</div>
       <div className="text-[11px] text-[var(--text-2)]">Live detection engineering workshop {reserved && <span className="text-emerald-600">• Reserved</span>}</div>
-      <Button size="sm" variant={reserved?"default":"secondary"} className="mt-2 h-7 text-[12px]" onClick={toggle}>{reserved?"✓ Reserved — Cancel?":"Reserve seat"}</Button>
+      <Button size="sm" variant={reserved?"default":"secondary"} className="mt-2 h-9 sm:h-7 min-h-[36px] sm:min-h-0 text-[12px]" onClick={toggle}>{reserved?"✓ Reserved — Cancel?":"Reserve seat"}</Button>
     </div>
   )
 }
 
 function ChevronLink() {
-  return <Link href="/labs/sql-injection" className="w-7 h-7 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" /></Link>
+  return <Link href="/labs/sql-injection" className="w-9 h-9 sm:w-7 sm:h-7 min-h-[36px] sm:min-h-0 min-w-[36px] sm:min-w-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" /></Link>
 }

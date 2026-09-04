@@ -67,7 +67,7 @@ const sections = [
   },
 ]
 
-export function Sidebar({ collapsed, mobileOpen }: { collapsed?: boolean, mobileOpen?: boolean }) {
+export function Sidebar({ collapsed, mobileOpen, onClose }: { collapsed?: boolean, mobileOpen?: boolean, onClose?: () => void }) {
   const pathname = usePathname()
   const { logout, user } = useAuth()
   const displayName = user?.name || "Notva Laka"
@@ -103,11 +103,12 @@ export function Sidebar({ collapsed, mobileOpen }: { collapsed?: boolean, mobile
   }, [accountOpen])
 
   return (
+    <>
     <aside className={cn(
-      "shrink-0 border-r border-[var(--border)] bg-[var(--surface)] flex flex-col",
+      "shrink-0 border-r border-[var(--border)] bg-[var(--surface)] flex flex-col overflow-y-auto",
       "lg:sticky lg:top-[56px] lg:h-[calc(100vh-56px)] lg:overflow-y-auto",
       collapsed ? "w-[64px]" : "w-[240px]",
-      mobileOpen ? "flex fixed inset-0 top-[56px] z-30 w-full lg:static" : "hidden lg:flex"
+      mobileOpen ? "flex fixed inset-0 top-[56px] z-30 w-[280px] max-w-[85vw] lg:static" : "hidden lg:flex"
     )}>
       <div className="flex-1 p-2.5 space-y-5 overflow-y-auto">
         {sections.map(section => (
@@ -125,7 +126,7 @@ export function Sidebar({ collapsed, mobileOpen }: { collapsed?: boolean, mobile
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-[500] tracking-[-0.01em] transition-colors",
+                      "flex items-center gap-3 rounded-[10px] px-3 py-3 sm:py-2.5 text-[13px] font-[500] tracking-[-0.01em] transition-colors",
                       active
                         ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm"
                         : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800",
@@ -210,5 +211,7 @@ export function Sidebar({ collapsed, mobileOpen }: { collapsed?: boolean, mobile
         </div>
       )}
     </aside>
+    {mobileOpen && <div className="fixed inset-0 top-[56px] bg-black/40 z-20 lg:hidden" onClick={onClose} aria-hidden="true" />}
+    </>
   )
 }

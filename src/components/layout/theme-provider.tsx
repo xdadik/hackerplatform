@@ -32,7 +32,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggle = React.useCallback(() => setTheme(t => t === "dark" ? "light" : "dark"), [])
 
   // prevent flash while mounted
-  // if (!mounted) return null
 
   return (
     <ThemeContext.Provider value={{ theme, toggle, setTheme }}>

@@ -1,9 +1,6 @@
 "use client"
 import * as React from "react"
 import { sanitizeInput, sanitizeEmail } from "@/lib/sanitize"
-// SECURITY NOTICE: This provider currently uses localStorage for demo only.
-// In production, replace with httpOnly Secure cookies (see src/lib/auth-security.ts).
-// Never trust localStorage for authorization — server must validate JWT on every request.
 
 export type AegisUser = {
   email: string
@@ -88,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const prevUserRaw = localStorage.getItem("aegis_user")
       let prevUser: AegisUser | null = null
       try { prevUser = prevUserRaw ? JSON.parse(prevUserRaw) : null } catch {}
-      // Sanitize email — validate format, fallback to safe default
       const rawEmail = (email?.trim() || prevUser?.email || localStorage.getItem("aegis_email") || "").trim() || "user@aegis.local"
       const sanitizedEmail = sanitizeEmail(rawEmail) || "user@aegis.local"
       const finalEmail = sanitizedEmail

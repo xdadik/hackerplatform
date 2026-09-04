@@ -32,15 +32,15 @@ export default function LearnPage() {
               <h1 className="text-[22px] font-[650] tracking-[-0.03em]">Academy</h1>
               <p className="mt-1 text-[13.5px] text-[var(--text-2)] max-w-[600px]">Structured progression with prerequisites, estimates, and hands-on assessments. Pick up where you left off — or start a new path.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-auto">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" />
-                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, lessons..." className="pl-8 h-8 w-[220px] sm:w-[260px] bg-[var(--surface)]" />
+                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, lessons..." className="pl-8 h-11 sm:h-8 w-full sm:w-[260px] bg-[var(--surface)] min-h-[44px] sm:min-h-0" />
                 {q && <button onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
               </div>
-              <div className="flex items-center gap-1 p-1 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)]">
+              <div className="flex items-center gap-1 p-1 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] overflow-x-auto">
                 {["All","Beginner","Intermediate","Advanced"].map(l=>(
-                  <button key={l} onClick={()=>setLevelFilter(l)} className={`px-2.5 py-1 rounded-[6px] text-[12px] font-[500] ${levelFilter===l ? "bg-[var(--surface)] border border-[var(--border)] shadow-sm" : "text-[var(--text-2)]"}`}>{l}</button>
+                  <button key={l} onClick={()=>setLevelFilter(l)} className={`px-2.5 py-2 sm:py-1 rounded-[6px] text-[12px] font-[500] min-h-[36px] sm:min-h-0 whitespace-nowrap ${levelFilter===l ? "bg-[var(--surface)] border border-[var(--border)] shadow-sm" : "text-[var(--text-2)]"}`}>{l}</button>
                 ))}
               </div>
             </div>
@@ -53,7 +53,7 @@ export default function LearnPage() {
           <span className="text-[12px] text-[var(--text-3)]">{levelFilter!=="All" ? `Level: ${levelFilter}` : "All levels"} {q && `• search: "${q}"`}</span>
         </div>
 
-        <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <Stagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {filtered.map(path => (
             <div key={path.id} className="stagger-item"><Card className="group hover:shadow-md hover:-translate-y-[1px] transition-all h-full">
               <CardContent className="p-5">
@@ -79,7 +79,7 @@ export default function LearnPage() {
             </Card></div>
           ))}
           {filtered.length===0 && (
-            <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center col-span-full"><div className="text-[13px] font-[600]">No courses match</div><div className="text-[12px] text-[var(--text-2)]">Try different search or level filter.</div><Button size="sm" className="mt-3 h-7" onClick={()=>{setQ(""); setLevelFilter("All")}}>Clear filters</Button></CardContent></Card>
+            <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center col-span-full"><div className="text-[13px] font-[600]">No courses match</div><div className="text-[12px] text-[var(--text-2)]">Try different search or level filter.</div><Button size="sm" className="mt-3 h-9 sm:h-7 min-h-[36px] sm:min-h-0" onClick={()=>{setQ(""); setLevelFilter("All")}}>Clear filters</Button></CardContent></Card>
           )}
         </Stagger>
 
@@ -90,7 +90,7 @@ export default function LearnPage() {
               <h3 className="text-[14px] font-[650]">Skill progression</h3>
               <Link href="/skills" className="text-[12px] font-medium text-[var(--accent)] hover:underline">View skill map →</Link>
             </div>
-            <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {[
                 { skill: "Web Security", level: "Intermediate", next: "Advanced", pct: 72 },
                 { skill: "Linux", level: "Intermediate", next: "Advanced", pct: 68 },

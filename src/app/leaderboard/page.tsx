@@ -49,16 +49,16 @@ export default function LeaderboardPage() {
 
           <TabsContent value="global">
             {/* Podium */}
-            <Stagger className="grid grid-cols-3 gap-3 mb-6 mt-4">
+            <Stagger className="grid grid-cols-3 gap-2 sm:gap-3 mb-6 mt-4">
               {[
                 { rank: 2, user: data[1], height: "pt-8" },
                 { rank: 1, user: data[0], height: "pt-4", crown: true },
                 { rank: 3, user: data[2], height: "pt-12" },
               ].map(p => (
                 <div key={p.rank} className="stagger-item"><Card className={`${p.rank === 1 ? "border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 dark:border-amber-900" : ""}`}>
-                  <CardContent className={`p-4 text-center ${p.height}`}>
+                  <CardContent className={`p-2 sm:p-4 text-center ${p.height}`}>
                     {p.crown && <Crown className="w-5 h-5 text-amber-500 mx-auto mb-1" aria-hidden="true" />}
-                    <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center text-[13px] font-bold border-2 ${p.rank===1 ? "bg-amber-500 text-white border-amber-600" : p.rank===2 ? "bg-zinc-400 text-white border-zinc-500" : "bg-amber-700 text-white border-amber-800"}`} aria-hidden="true">
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full mx-auto flex items-center justify-center text-[13px] font-bold border-2 ${p.rank===1 ? "bg-amber-500 text-white border-amber-600" : p.rank===2 ? "bg-zinc-400 text-white border-zinc-500" : "bg-amber-700 text-white border-amber-800"}`} aria-hidden="true">
                       {p.user.avatar}
                     </div>
                     <div className="mt-2 text-[13px] font-[600]">{p.user.username}</div>
@@ -124,8 +124,8 @@ export default function LeaderboardPage() {
                   <div className="px-4 py-3 border-t border-[var(--border)] flex items-center justify-between text-[12px]">
                     <span className="text-[var(--text-3)]">Page {page} of {totalPages} • {data.length} total</span>
                     <div className="flex gap-1">
-                      <Button variant="secondary" size="sm" className="h-7" aria-label="Previous page" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>Previous</Button>
-                      <Button variant="secondary" size="sm" className="h-7" aria-label="Next page" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next</Button>
+                      <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0" aria-label="Previous page" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>Previous</Button>
+                      <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0" aria-label="Next page" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next</Button>
                     </div>
                   </div>
                 </CardContent>
@@ -141,7 +141,7 @@ export default function LeaderboardPage() {
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Labs leaderboard — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Track fastest solves and completion quality across all labs. Rankings update as you complete objectives.</div>
-                <Link href="/labs"><Button size="sm" className="mt-4 h-8 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse labs</Button></Link>
+                <Link href="/labs"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse labs</Button></Link>
               </CardContent>
             </Card>
           </TabsContent>
@@ -153,7 +153,7 @@ export default function LeaderboardPage() {
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Challenge leaderboard — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Points, solve time, and first-blood bonuses. Compete globally and climb the ranks.</div>
-                <Link href="/challenges"><Button size="sm" className="mt-4 h-8 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse challenges</Button></Link>
+                <Link href="/challenges"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse challenges</Button></Link>
               </CardContent>
             </Card>
           </TabsContent>
@@ -165,7 +165,7 @@ export default function LeaderboardPage() {
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Research leaderboard — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Bookmarks, citations, and review quality. Share verifiable research to earn reputation.</div>
-                <Link href="/research"><Button size="sm" className="mt-4 h-8 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Explore research</Button></Link>
+                <Link href="/research"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Explore research</Button></Link>
               </CardContent>
             </Card>
           </TabsContent>
@@ -177,7 +177,7 @@ export default function LeaderboardPage() {
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Team rankings — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Aggregated reputation and competition performance. Form a team to compete together.</div>
-                <Link href="/teams"><Button size="sm" className="mt-4 h-8 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">View teams</Button></Link>
+                <Link href="/teams"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">View teams</Button></Link>
               </CardContent>
             </Card>
           </TabsContent>

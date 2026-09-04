@@ -27,7 +27,6 @@ export function Stagger({
     const targets = ref.current.querySelectorAll(selector)
     if (!targets.length) return
     try {
-      // set initial state for JS animation
       animate(targets, {
         opacity: [0, 1],
         y: [y, 0],
@@ -36,7 +35,6 @@ export function Stagger({
         ease: "outQuad",
       })
     } catch {
-      // fail silently - no animation is better than broken UI
     }
   }, [selector, y, duration, delayStep, startDelay])
 
@@ -140,7 +138,6 @@ export function ProgressAnimated({ value, className }: { value: number; classNam
       ref.current.style.width = `${value}%`
     }
   }, [value])
-  // container expects parent to have bg-surface-3 and rounded
   return <div ref={ref} className={className ?? "h-full bg-[var(--accent)] rounded-full"} style={{ width: "0%" }} />
 }
 

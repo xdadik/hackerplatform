@@ -82,7 +82,7 @@ export default function LabsPage() {
                 <div className="text-[12px] text-amber-800 dark:text-amber-300">Upgrade to Go or Plus to unlock all isolated labs and environments. Only paid users can open labs.</div>
               </div>
             </div>
-            <Link href="/settings/billing" className="shrink-0"><Button size="sm" className="h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white">Upgrade plan</Button></Link>
+            <Link href="/settings/billing" className="shrink-0"><Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-full bg-amber-500 hover:bg-amber-600 text-white">Upgrade plan</Button></Link>
           </div>
         )}
         <FadeIn>
@@ -92,12 +92,12 @@ export default function LabsPage() {
               <p className="mt-1 text-[13.5px] text-[var(--text-2)]">Isolated environments with objectives, hints, and reset. Terminal where appropriate — no gamification, just practice. {isPaid ? "" : "Locked until upgrade."}</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-[280px]">
+              <div className="relative flex-1 sm:w-[280px] w-full">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" />
-                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search labs, objectives, tags..." className="pl-8 h-8 bg-[var(--surface)]" />
+                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search labs, objectives, tags..." className="pl-8 h-11 sm:h-8 bg-[var(--surface)] min-h-[44px] sm:min-h-0" />
                 {q && <button onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
               </div>
-              <Button variant="secondary" size="sm" className="h-8 shrink-0" onClick={()=>alert("Filters: Use category pills + search. Category + difficulty filtering is active. Saved in URL state would sync — here local state.")}><Filter className="w-3.5 h-3.5 mr-1" /> Filters</Button>
+              <Button variant="secondary" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 shrink-0" onClick={()=>alert("Filters: Use category pills + search. Category + difficulty filtering is active. Saved in URL state would sync — here local state.")}><Filter className="w-3.5 h-3.5 mr-1" /> Filters</Button>
             </div>
           </div>
         </FadeIn>
@@ -106,7 +106,7 @@ export default function LabsPage() {
         <FadeIn delay={60}>
           <div className="flex gap-1.5 overflow-x-auto pb-3 scrollbar-thin">
             {categories.map(cat => (
-              <button key={cat} onClick={()=>setActiveCat(cat)} className={`px-3 py-1.5 rounded-full text-[12.5px] font-[500] whitespace-nowrap border transition-colors ${cat === activeCat ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"}`}>
+              <button key={cat} onClick={()=>setActiveCat(cat)} className={`px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 rounded-full text-[12.5px] font-[500] whitespace-nowrap border transition-colors ${cat === activeCat ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"}`}>
                 {cat}
               </button>
             ))}
@@ -153,15 +153,15 @@ export default function LabsPage() {
                         {/* Mobile actions: View details is always accessible, Start is paid */}
                         <div className="flex sm:hidden items-center gap-2 mt-3">
                           <Link href={`/labs/${lab.id}`} className="flex-1">
-                            <Button variant="secondary" size="sm" className="w-full rounded-[8px] h-8 text-[12.5px]">View details</Button>
+                            <Button variant="secondary" size="sm" className="w-full rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12.5px]">View details</Button>
                           </Link>
                           {!isPaid ? (
                             <Link href="/settings/billing">
-                              <Button size="sm" variant="secondary" className="rounded-[8px] h-8 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><Lock className="w-3.5 h-3.5" /> Upgrade</Button>
+                              <Button size="sm" variant="secondary" className="rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><Lock className="w-3.5 h-3.5" /> Upgrade</Button>
                             </Link>
                           ) : (
                             <Link href={`/labs/${lab.id}`}>
-                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-8" onClick={()=>{ try{ localStorage.setItem("aegis_last_lab", lab.id)}catch{}}}>
+                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{ try{ localStorage.setItem("aegis_last_lab", lab.id)}catch{}}}>
                                 {lab.status === "in_progress" ? <><Play className="w-3.5 h-3.5 mr-1" /> Continue</> : lab.status === "completed" ? "Review" : "Start lab"}
                               </Button>
                             </Link>
@@ -175,11 +175,11 @@ export default function LabsPage() {
                           </Link>
                           {!isPaid ? (
                             <Link href="/settings/billing">
-                              <Button size="sm" variant="secondary" className="rounded-[8px] h-8 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade</Button>
+                              <Button size="sm" variant="secondary" className="rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade</Button>
                             </Link>
                           ) : (
                             <Link href={`/labs/${lab.id}`}>
-                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-8" onClick={()=>{ try{ localStorage.setItem("aegis_last_lab", lab.id)}catch{}}}>
+                              <Button size="sm" variant={lab.status === "in_progress" ? "default" : "secondary"} className="rounded-[8px] h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{ try{ localStorage.setItem("aegis_last_lab", lab.id)}catch{}}}>
                                 {lab.status === "in_progress" ? <><Play className="w-3.5 h-3.5 mr-1" /> Continue</> : lab.status === "completed" ? "Review" : "Start lab"}
                               </Button>
                             </Link>
@@ -192,7 +192,7 @@ export default function LabsPage() {
                 </Card></div>
               ))}
               {filtered.length===0 && (
-                <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center"><div className="text-[13px] font-[600]">No labs match filters</div><div className="text-[12px] text-[var(--text-2)]">Adjust search or category.</div><Button size="sm" className="mt-3 h-8" onClick={()=>{setQ(""); setActiveCat("All")}}>Clear filters</Button></CardContent></Card>
+                <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center"><div className="text-[13px] font-[600]">No labs match filters</div><div className="text-[12px] text-[var(--text-2)]">Adjust search or category.</div><Button size="sm" className="mt-3 h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{setQ(""); setActiveCat("All")}}>Clear filters</Button></CardContent></Card>
               )}
             </Stagger>
           </div>
@@ -230,9 +230,9 @@ export default function LabsPage() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
-                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleNotes}><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
-                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleHints}><Flag className="w-3 h-3 mr-1" /> Hints</Button>
-                    <Button variant="ghost" size="sm" className="h-8 text-[12px] border border-[var(--border)]" onClick={handleReset}><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
+                    <Button variant="secondary" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12px]" onClick={handleNotes}><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
+                    <Button variant="secondary" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12px]" onClick={handleHints}><Flag className="w-3 h-3 mr-1" /> Hints</Button>
+                    <Button variant="ghost" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12px] border border-[var(--border)]" onClick={handleReset}><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
                   </div>
 
                   <div className="rounded-[10px] bg-[#0F1012] border border-zinc-800 p-3 font-mono text-[12px] leading-relaxed">
@@ -246,18 +246,18 @@ export default function LabsPage() {
                     <div className="text-zinc-300 mt-1">$ <span className="w-2 h-4 bg-zinc-500 inline-block animate-pulse align-middle" /></div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     {!isPaid ? (
-                      <Link href="/settings/billing" className="flex-1"><Button className="w-full rounded-[8px] gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock lab</Button></Link>
+                      <Link href="/settings/billing" className="flex-1 w-full sm:w-auto"><Button className="w-full rounded-[8px] h-11 sm:h-10 min-h-[44px] sm:min-h-0 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock lab</Button></Link>
                     ) : (
-                      <Link href="/labs/sql-injection" className="flex-1"><Button className="w-full rounded-[8px]" onClick={()=>{ try{ localStorage.setItem("aegis_lab_opened","sql-injection")}catch{}}}>Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/labs/sql-injection" className="flex-1 w-full sm:w-auto"><Button className="w-full rounded-[8px] h-11 sm:h-10 min-h-[44px] sm:min-h-0" onClick={()=>{ try{ localStorage.setItem("aegis_lab_opened","sql-injection")}catch{}}}>Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
                     )}
-                    <Button variant="secondary" className="rounded-[8px]" onClick={handleReport}>Report issue</Button>
+                    <Button variant="secondary" className="rounded-[8px] h-11 sm:h-10 min-h-[44px] sm:min-h-0 w-full sm:w-auto" onClick={handleReport}>Report issue</Button>
                   </div>
                   {reportOpen && (
                     <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2">
                       <textarea value={reportText} onChange={e=>setReportText(e.target.value)} placeholder="Describe the issue..." className="w-full min-h-[72px] rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[13px]" />
-                      <div className="flex gap-2"><Button size="sm" className="h-8" onClick={submitReport}>Submit report</Button><Button size="sm" variant="ghost" className="h-8" onClick={()=>setReportOpen(false)}>Cancel</Button></div>
+                      <div className="flex gap-2"><Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={submitReport}>Submit report</Button><Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setReportOpen(false)}>Cancel</Button></div>
                     </div>
                   )}
                 </div>
@@ -300,22 +300,22 @@ export default function LabsPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleNotes}><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
-                    <Button variant="secondary" size="sm" className="h-8 text-[12px]" onClick={handleHints}><Flag className="w-3 h-3 mr-1" /> Hints</Button>
-                    <Button variant="ghost" size="sm" className="h-8 text-[12px] border border-[var(--border)]" onClick={handleReset}><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
+                    <Button variant="secondary" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12px]" onClick={handleNotes}><StickyNote className="w-3 h-3 mr-1" /> Notes</Button>
+                    <Button variant="secondary" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12px]" onClick={handleHints}><Flag className="w-3 h-3 mr-1" /> Hints</Button>
+                    <Button variant="ghost" size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-[12px] border border-[var(--border)]" onClick={handleReset}><RotateCcw className="w-3 h-3 mr-1" /> Reset</Button>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     {!isPaid ? (
-                      <Link href="/settings/billing" className="flex-1"><Button className="w-full rounded-[8px] gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock</Button></Link>
+                      <Link href="/settings/billing" className="flex-1 w-full sm:w-auto"><Button className="w-full rounded-[8px] h-11 sm:h-10 min-h-[44px] sm:min-h-0 gap-1.5 border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/20"><Lock className="w-3.5 h-3.5" /> Upgrade to unlock</Button></Link>
                     ) : (
-                      <Link href="/labs/sql-injection" className="flex-1"><Button className="w-full rounded-[8px]">Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/labs/sql-injection" className="flex-1 w-full sm:w-auto"><Button className="w-full rounded-[8px] h-11 sm:h-10 min-h-[44px] sm:min-h-0">Open lab <ChevronRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
                     )}
-                    <Button variant="secondary" className="rounded-[8px]" onClick={handleReport}>Report issue</Button>
+                    <Button variant="secondary" className="rounded-[8px] h-11 sm:h-10 min-h-[44px] sm:min-h-0 w-full sm:w-auto" onClick={handleReport}>Report issue</Button>
                   </div>
                   {reportOpen && (
                     <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2">
                       <textarea value={reportText} onChange={e=>setReportText(e.target.value)} placeholder="Describe the issue..." className="w-full min-h-[72px] rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[13px]" />
-                      <div className="flex gap-2"><Button size="sm" className="h-8" onClick={submitReport}>Submit report</Button><Button size="sm" variant="ghost" className="h-8" onClick={()=>setReportOpen(false)}>Cancel</Button></div>
+                      <div className="flex gap-2"><Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={submitReport}>Submit report</Button><Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setReportOpen(false)}>Cancel</Button></div>
                     </div>
                   )}
                 </div>

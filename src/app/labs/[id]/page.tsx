@@ -80,7 +80,7 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
     try{ document.querySelector('[data-workspace]')?.scrollIntoView({behavior:"smooth"}) }catch{}
   }
   const handleOpenNewTab = () => {
-    alert("Opening isolated lab in new tab (mock) — container at 10.10.14.2. In production this would proxy to K8s env.")
+    alert("opening lab — container at 10.10.14.2 (prod proxies to k8s).")
     try{ window.open(`/labs/${id}`, "_blank")}catch{}
   }
   const handleSubmitFlag = () => {

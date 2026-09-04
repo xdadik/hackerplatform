@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
@@ -24,6 +25,13 @@ export const metadata: Metadata = {
   }
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#FAFAF9",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -31,13 +39,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`${inter.variable} ${jetbrains.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--text)]">
+      <body className="min-h-screen min-h-[100dvh] flex flex-col bg-[var(--background)] text-[var(--text)]">
         <ThemeProvider>
           <AuthProvider>
             {children}
           </AuthProvider>
         </ThemeProvider>
-        {/* dangerouslySetInnerHTML is safe here: static inline script, no user input, no XSS vector. CSP in next.config.ts allows 'unsafe-inline' for this. Alternative is next/script. */}
+        {/* theme script — static */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
             try {
