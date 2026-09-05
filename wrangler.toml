@@ -1,9 +1,7 @@
 name = "aegis-platform"
 compatibility_date = "2026-09-05"
-pages_build_output_dir = ".vercel/output/static"
-
+# Cloudflare Pages — build via `npx @cloudflare/next-on-pages` → .vercel/output
+# Do NOT use `wrangler deploy` for Pages (use `wrangler pages deploy` or Pages dashboard auto-deploy)
+# Env vars for build (used by next-on-pages)
 [vars]
 NODE_VERSION = "20"
-
-[pages]
-# Cloudflare Pages via next-on-pages outputs to .vercel/output/static
