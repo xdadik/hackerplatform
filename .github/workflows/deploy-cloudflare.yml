@@ -37,7 +37,7 @@ jobs:
           fi
 
       - name: Build with next-on-pages
-        run: npx @cloudflare/next-on-pages@1
+        run: npx --legacy-peer-deps @cloudflare/next-on-pages@1
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
