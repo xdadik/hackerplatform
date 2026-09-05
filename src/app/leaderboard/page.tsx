@@ -23,8 +23,13 @@ export default function LeaderboardPage() {
   const [page, setPage] = React.useState(1)
   const data = leaderboard.length>0 ? leaderboard : demoFallback
   const perPage=5
-  const totalPages=Math.max(1, Math.ceil((data.length-3)/perPage))
+  const totalPages=Math.max(1, Math.ceil(Math.max(0, data.length-3)/perPage))
   const paged=data.filter(r=>r.rank>3).slice((page-1)*perPage, page*perPage)
+  const podiumSlots = [
+    { rank: 2, user: data[1], height: "pt-8" },
+    { rank: 1, user: data[0], height: "pt-4", crown: true },
+    { rank: 3, user: data[2], height: "pt-12" },
+  ].filter(s => !!s.user)
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-[1080px]">
@@ -49,27 +54,27 @@ export default function LeaderboardPage() {
 
           <TabsContent value="global">
             {/* Podium */}
+            {podiumSlots.length > 0 ? (
             <Stagger className="grid grid-cols-3 gap-2 sm:gap-3 mb-6 mt-4">
-              {[
-                { rank: 2, user: data[1], height: "pt-8" },
-                { rank: 1, user: data[0], height: "pt-4", crown: true },
-                { rank: 3, user: data[2], height: "pt-12" },
-              ].map(p => (
+              {podiumSlots.map(p => (
                 <div key={p.rank} className="stagger-item"><Card className={`${p.rank === 1 ? "border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 dark:border-amber-900" : ""}`}>
                   <CardContent className={`p-2 sm:p-4 text-center ${p.height}`}>
                     {p.crown && <Crown className="w-5 h-5 text-amber-500 mx-auto mb-1" aria-hidden="true" />}
                     <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full mx-auto flex items-center justify-center text-[13px] font-bold border-2 ${p.rank===1 ? "bg-amber-500 text-white border-amber-600" : p.rank===2 ? "bg-zinc-400 text-white border-zinc-500" : "bg-amber-700 text-white border-amber-800"}`} aria-hidden="true">
-                      {p.user.avatar}
+                      {p.user!.avatar}
                     </div>
-                    <div className="mt-2 text-[13px] font-[600]">{p.user.username}</div>
+                    <Link href={`/profile?user=${p.user!.username}`} className="mt-2 block text-[13px] font-[600] hover:underline hover:text-[var(--accent)]">{p.user!.username}</Link>
                     <div className="text-[11px] text-[var(--text-3)]">Rank #{p.rank}</div>
-                    <div className="mt-2 text-[16px] font-[700] tracking-tight"><CountUp value={p.user.reputation} /></div>
+                    <div className="mt-2 text-[16px] font-[700] tracking-tight"><CountUp value={p.user!.reputation} /></div>
                     <div className="text-[11px] text-[var(--text-3)]">reputation</div>
                     <Badge variant={p.rank===1 ? "default" : "secondary"} className="mt-2 text-[11px]">{p.rank===1 ? "Leader" : p.rank===2 ? "Challenger" : "Contender"}</Badge>
                   </CardContent>
                 </Card></div>
               ))}
             </Stagger>
+            ) : (
+              <Card className="mt-4 mb-6"><CardContent className="p-6 text-center text-[13px] text-[var(--text-2)]">No rankings yet — be the first!</CardContent></Card>
+            )}
 
             <FadeIn>
               <Card>
@@ -95,25 +100,25 @@ export default function LeaderboardPage() {
                         {paged.length===0 ? (
                           <tr><td colSpan={6} className="px-4 py-6 text-center text-[12px] text-[var(--text-2)]">No more rankings — page {page} empty</td></tr>
                         ) : paged.map(row => (
-                          <tr key={row.rank} className={`hover:bg-[var(--surface-2)] transition-colors ${row.username === "alexmorgan" ? "bg-[var(--accent-muted)]" : ""}`} aria-current={row.username === "alexmorgan" ? "true" : undefined}>
+                          <tr key={row.rank} className={`hover:bg-[var(--surface-2)] transition-colors ${row.username === "alexmorgan" ? "bg-[var(--accent-muted)]" : ""}`} aria-current={row.username === "alexmorgan" ? true : undefined}>
                             <td className="px-4 py-3">
                               <span className="inline-flex w-6 h-6 rounded-full items-center justify-center text-[11px] font-bold border bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-2)]" aria-label={`Rank ${row.rank}`}>
                                 {row.rank}
                               </span>
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-2.5">
+                              <Link href={`/profile?user=${row.username}`} className="flex items-center gap-2.5 hover:opacity-80">
                                 <div className="w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[11px] font-semibold" aria-hidden="true">{row.avatar}</div>
-                                <span className="text-[13px] font-[500]">{row.username}</span>
+                                <span className="text-[13px] font-[500] hover:text-[var(--accent)] hover:underline">{row.username}</span>
                                 {row.username === "alexmorgan" && <Badge variant="accent" className="text-[10px]">You</Badge>}
-                              </div>
+                              </Link>
                             </td>
                             <td className="px-4 py-3 text-[13px] font-mono hidden sm:table-cell"><CountUp value={row.labs} /></td>
                             <td className="px-4 py-3 text-[13px] font-mono hidden sm:table-cell"><CountUp value={row.challenges} /></td>
                             <td className="px-4 py-3 text-[13px] font-mono font-[600] text-right"><CountUp value={row.reputation} /></td>
                             <td className="px-4 py-3 text-right">
-                              <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${row.rank %2===0 ? "text-emerald-600" : "text-[var(--text-3)]"}`} aria-label={row.rank %2===0 ? `Up ${row.rank*2} positions` : "No change"}>
-                                {row.rank %2===0 ? <TrendingUp className="w-3 h-3" aria-hidden="true" /> : <span className="w-3 h-3" aria-hidden="true" />} {row.rank %2===0 ? `+${row.rank*2}` : "—"}
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-3)]" aria-label="No change">
+                                <span className="w-3 h-3" aria-hidden="true" /> —
                               </span>
                             </td>
                           </tr>
@@ -136,48 +141,48 @@ export default function LeaderboardPage() {
           <TabsContent value="labs">
             <Card className="border-dashed rounded-[12px] bg-[var(--surface-2)]">
               <CardContent className="p-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto">
-                  <Trophy className="w-5 h-5 text-[var(--text-2)]" />
+                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto" aria-hidden="true">
+                  <Trophy className="w-5 h-5 text-[var(--text-2)]" aria-hidden="true" />
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Labs leaderboard — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Track fastest solves and completion quality across all labs. Rankings update as you complete objectives.</div>
-                <Link href="/labs"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse labs</Button></Link>
+                <Button asChild size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200"><Link href="/labs">Browse labs</Link></Button>
               </CardContent>
             </Card>
           </TabsContent>
           <TabsContent value="challenges">
             <Card className="border-dashed rounded-[12px] bg-[var(--surface-2)]">
               <CardContent className="p-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto">
-                  <Trophy className="w-5 h-5 text-[var(--text-2)]" />
+                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto" aria-hidden="true">
+                  <Trophy className="w-5 h-5 text-[var(--text-2)]" aria-hidden="true" />
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Challenge leaderboard — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Points, solve time, and first-blood bonuses. Compete globally and climb the ranks.</div>
-                <Link href="/challenges"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Browse challenges</Button></Link>
+                <Button asChild size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200"><Link href="/challenges">Browse challenges</Link></Button>
               </CardContent>
             </Card>
           </TabsContent>
           <TabsContent value="research">
             <Card className="border-dashed rounded-[12px] bg-[var(--surface-2)]">
               <CardContent className="p-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto">
-                  <Crown className="w-5 h-5 text-[var(--text-2)]" />
+                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto" aria-hidden="true">
+                  <Crown className="w-5 h-5 text-[var(--text-2)]" aria-hidden="true" />
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Research leaderboard — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Bookmarks, citations, and review quality. Share verifiable research to earn reputation.</div>
-                <Link href="/research"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">Explore research</Button></Link>
+                <Button asChild size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200"><Link href="/research">Explore research</Link></Button>
               </CardContent>
             </Card>
           </TabsContent>
           <TabsContent value="teams">
             <Card className="border-dashed rounded-[12px] bg-[var(--surface-2)]">
               <CardContent className="p-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto">
-                  <TrendingUp className="w-5 h-5 text-[var(--text-2)]" />
+                <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto" aria-hidden="true">
+                  <TrendingUp className="w-5 h-5 text-[var(--text-2)]" aria-hidden="true" />
                 </div>
                 <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em]">Team rankings — coming soon</div>
                 <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[360px] mx-auto">Aggregated reputation and competition performance. Form a team to compete together.</div>
-                <Link href="/teams"><Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200">View teams</Button></Link>
+                <Button asChild size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200"><Link href="/teams">View teams</Link></Button>
               </CardContent>
             </Card>
           </TabsContent>

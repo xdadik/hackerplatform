@@ -1,102 +1,153 @@
 "use client"
 import Link from "next/link"
 import * as React from "react"
+import { use } from "react"
+import { notFound } from "next/navigation"
 import { AppShell } from "@/components/layout/app-shell"
 import { VideoPlayer } from "@/components/video-player"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp, Star, ChevronRight, Clock, MessageCircle, Play, Search, CheckCircle2 } from "lucide-react"
 
-const modules = [
-  {
-    title: "1. Kirish",
-    subtitle: "Module 1",
-    count: "0 / 103",
-    collapsed: true,
-    lessons: [] as any[],
-  },
-  {
-    title: "Linux",
-    subtitle: "Module 2",
-    collapsed: true,
-    lessons: [] as any[],
-  },
-  {
-    title: "2. Recon (Razvedka bosqichi)",
-    subtitle: "Module 3",
-    expanded: true,
-    lessons: [
-      { title: "Recon", subtitle: "Lesson 3.1", time: "06:02", active: false },
-      { title: "Amaliyot: Pentest metodologiyasi — 6 ...", subtitle: "Lesson 3.2", time: "Practice", isPractice: true, active: false },
-      { title: "Subdomain-enum", subtitle: "Lesson 3.3", time: "09:59", active: false },
-      { title: "Shodan & Cencys", subtitle: "Lesson 3.4", time: "04:01", active: false },
-      { title: "Directory enum", subtitle: "Lesson 3.5", time: "08:04", active: false },
-      { title: "Information disclosure Lab", subtitle: "Lesson 3.6", time: "04:44", active: false },
-      { title: "Nmap", subtitle: "Lesson 3.7", time: "12:10", active: false },
-    ],
-  },
-]
+type Lesson = { title: string; subtitle: string; time: string; isPractice?: boolean; src?: string; youtubeId?: string }
 
-const pathData: Record<string, { title: string; breadcrumb: string; lessons: { title: string; subtitle: string; time: string; isPractice?: boolean }[] }> = {
+const knownSlugs = ["cybersecurity-101", "networking", "linux", "web", "cloud", "ad", "re", "forensics", "soc"]
+
+const pathData: Record<string, { title: string; breadcrumb: string; lessons: Lesson[] }> = {
   "cybersecurity-101": {
     title: "What is Cybersecurity",
     breadcrumb: "1. Intro",
     lessons: [
-      { title: "What is Cybersecurity?", subtitle: "Lesson 1.1", time: "10:34" },
+      { title: "What is Cybersecurity?", subtitle: "Lesson 1.1", time: "10:34", src: "/videos/cybersecurity-101-intro.mp4" },
     ],
   },
   networking: {
     title: "Networking Fundamentals",
     breadcrumb: "1. Networking",
     lessons: [
-      { title: "OSI & TCP/IP", subtitle: "Lesson 1.1", time: "08:12" },
-      { title: "Subnetting", subtitle: "Lesson 1.2", time: "12:40" },
-      { title: "Wireshark Basics", subtitle: "Lesson 1.3", time: "14:20" },
-      { title: "Lab: Traffic Analysis", subtitle: "Lab 1.4", time: "Practice", isPractice: true },
+      { title: "OSI & TCP/IP", subtitle: "Lesson 1.1", time: "08:12", src: "/videos/networking-1.mp4" },
+      { title: "Subnetting", subtitle: "Lesson 1.2", time: "12:40", src: "/videos/networking-2.mp4" },
+      { title: "Wireshark Basics", subtitle: "Lesson 1.3", time: "14:20", src: "/videos/networking-3.mp4" },
+      { title: "Lab: Traffic Analysis", subtitle: "Lab 1.4", time: "Practice", isPractice: true, src: "/videos/networking-4.mp4" },
+    ],
+  },
+  web: {
+    title: "Web Application Security",
+    breadcrumb: "3. Web Security",
+    lessons: [
+      { title: "OWASP Top 10", subtitle: "Lesson 3.1", time: "10:05", src: "/videos/web-1.mp4" },
+      { title: "SQL Injection", subtitle: "Lesson 3.2", time: "Practice", isPractice: true, src: "/videos/web-2.mp4" },
+      { title: "XSS & CSRF", subtitle: "Lesson 3.3", time: "09:10", src: "/videos/web-3.mp4" },
+      { title: "SSRF & XXE", subtitle: "Lesson 3.4", time: "11:20", src: "/videos/web-4.mp4" },
     ],
   },
   "web-security": {
     title: "Web Application Security",
     breadcrumb: "3. Web Security",
     lessons: [
-      { title: "OWASP Top 10", subtitle: "Lesson 3.1", time: "10:05" },
-      { title: "SQL Injection", subtitle: "Lesson 3.2", time: "Practice", isPractice: true },
-      { title: "XSS & CSRF", subtitle: "Lesson 3.3", time: "09:10" },
-      { title: "SSRF & XXE", subtitle: "Lesson 3.4", time: "11:20" },
+      { title: "OWASP Top 10", subtitle: "Lesson 3.1", time: "10:05", src: "/videos/web-1.mp4" },
+      { title: "SQL Injection", subtitle: "Lesson 3.2", time: "Practice", isPractice: true, src: "/videos/web-2.mp4" },
+      { title: "XSS & CSRF", subtitle: "Lesson 3.3", time: "09:10", src: "/videos/web-3.mp4" },
+      { title: "SSRF & XXE", subtitle: "Lesson 3.4", time: "11:20", src: "/videos/web-4.mp4" },
     ],
   },
   linux: {
     title: "Linux Fundamentals",
     breadcrumb: "2. Linux",
     lessons: [
-      { title: "File System", subtitle: "Lesson 2.1", time: "07:30" },
-      { title: "Permissions", subtitle: "Lesson 2.2", time: "09:15" },
-      { title: "Lab: Privilege Escalation", subtitle: "Lab 2.3", time: "Practice", isPractice: true },
+      { title: "File System", subtitle: "Lesson 2.1", time: "07:30", src: "/videos/linux-1.mp4" },
+      { title: "Permissions", subtitle: "Lesson 2.2", time: "09:15", src: "/videos/linux-2.mp4" },
+      { title: "Lab: Privilege Escalation", subtitle: "Lab 2.3", time: "Practice", isPractice: true, src: "/videos/linux-3.mp4" },
+    ],
+  },
+  cloud: {
+    title: "Cloud Security",
+    breadcrumb: "4. Cloud",
+    lessons: [
+      { title: "IAM Basics", subtitle: "Lesson 4.1", time: "09:40", src: "/videos/cloud-1.mp4" },
+      { title: "S3 Misconfigurations", subtitle: "Lesson 4.2", time: "11:15", src: "/videos/cloud-2.mp4" },
+      { title: "Lab: Cloud Audit", subtitle: "Lab 4.3", time: "Practice", isPractice: true, src: "/videos/cloud-3.mp4" },
+    ],
+  },
+  ad: {
+    title: "Active Directory",
+    breadcrumb: "5. AD",
+    lessons: [
+      { title: "AD Fundamentals", subtitle: "Lesson 5.1", time: "10:00", src: "/videos/ad-1.mp4" },
+      { title: "Kerberoasting", subtitle: "Lesson 5.2", time: "13:20", src: "/videos/ad-2.mp4" },
+      { title: "Lab: Enumeration", subtitle: "Lab 5.3", time: "Practice", isPractice: true, src: "/videos/ad-3.mp4" },
+    ],
+  },
+  re: {
+    title: "Reverse Engineering",
+    breadcrumb: "6. RE",
+    lessons: [
+      { title: "Assembly Basics", subtitle: "Lesson 6.1", time: "12:00", src: "/videos/re-1.mp4" },
+      { title: "Binary Analysis", subtitle: "Lesson 6.2", time: "14:30", src: "/videos/re-2.mp4" },
+      { title: "Lab: Crackme", subtitle: "Lab 6.3", time: "Practice", isPractice: true, src: "/videos/re-3.mp4" },
+    ],
+  },
+  forensics: {
+    title: "Digital Forensics",
+    breadcrumb: "7. Forensics",
+    lessons: [
+      { title: "Evidence Acquisition", subtitle: "Lesson 7.1", time: "08:45", src: "/videos/forensics-1.mp4" },
+      { title: "Memory Analysis", subtitle: "Lesson 7.2", time: "12:10", src: "/videos/forensics-2.mp4" },
+      { title: "Lab: Volatility", subtitle: "Lab 7.3", time: "Practice", isPractice: true, src: "/videos/forensics-3.mp4" },
+    ],
+  },
+  soc: {
+    title: "Security Operations",
+    breadcrumb: "8. SOC",
+    lessons: [
+      { title: "SOC Overview", subtitle: "Lesson 8.1", time: "09:00", src: "/videos/soc-1.mp4" },
+      { title: "SIEM Tuning", subtitle: "Lesson 8.2", time: "11:30", src: "/videos/soc-2.mp4" },
+      { title: "Lab: Alert Triage", subtitle: "Lab 8.3", time: "Practice", isPractice: true, src: "/videos/soc-3.mp4" },
     ],
   },
 }
 
 export default function LearnInside({ params }: { params: Promise<{ slug: string }> }) {
-  const resolved = React.use(params as any) as { slug: string }
-  const slug = resolved?.slug || "networking"
+  const { slug } = use(params)
+
+  if (!knownSlugs.includes(slug) && !(slug in pathData)) {
+    notFound()
+  }
+
   const data = pathData[slug] || {
     title: slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
     breadcrumb: "2. Recon (Razvedka bosqichi)",
     lessons: [
-      { title: "Recon", subtitle: "Lesson 3.1", time: "06:02" },
-      { title: "Amaliyot: Pentest metodologiyasi — 6 ...", subtitle: "Lesson 3.2", time: "Practice", isPractice: true },
-      { title: "Subdomain-enum", subtitle: "Lesson 3.3", time: "09:59" },
-      { title: "Shodan & Cencys", subtitle: "Lesson 3.4", time: "04:01" },
+      { title: "Recon", subtitle: "Lesson 3.1", time: "06:02", src: `/videos/${slug}-1.mp4` },
+      { title: "Amaliyot: Pentest metodologiyasi — 6 ...", subtitle: "Lesson 3.2", time: "Practice", isPractice: true, src: `/videos/${slug}-2.mp4` },
+      { title: "Subdomain-enum", subtitle: "Lesson 3.3", time: "09:59", src: `/videos/${slug}-3.mp4` },
+      { title: "Shodan & Cencys", subtitle: "Lesson 3.4", time: "04:01", src: `/videos/${slug}-4.mp4` },
     ],
   }
+
   const [activeLesson, setActiveLesson] = React.useState(data.lessons[0]?.title || "DVWA installation")
   const [expanded, setExpanded] = React.useState(true)
-  const storageKey = `aegis_lesson_${slug}_completed`
+
+  // Sync activeLesson when slug changes
+  React.useEffect(() => {
+    setActiveLesson(data.lessons[0]?.title || "")
+  }, [slug, data.lessons])
+
+  const storageKey = `aegis_lesson_${slug}_${activeLesson}`
+
   const [completed, setCompleted] = React.useState(false)
 
   React.useEffect(() => {
     try { setCompleted(localStorage.getItem(storageKey) === "true") } catch {}
   }, [storageKey])
+
+  // Also sync when slug changes - reset completed check
+  React.useEffect(() => {
+    try {
+      const key = `aegis_lesson_${slug}_${data.lessons[0]?.title || ""}`
+      setCompleted(localStorage.getItem(key) === "true")
+    } catch {}
+  }, [slug, data.lessons])
 
   const handleVideoEnd = () => {
     try { localStorage.setItem(storageKey, "true") } catch {}
@@ -104,7 +155,7 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
   }
 
   // Next / Previous video logic
-  const currentIndex = React.useMemo(() => data.lessons.findIndex((l: any) => l.title === activeLesson), [data.lessons, activeLesson])
+  const currentIndex = React.useMemo(() => data.lessons.findIndex((l: Lesson) => l.title === activeLesson), [data.lessons, activeLesson])
   const hasNext = currentIndex >= 0 && currentIndex < data.lessons.length - 1
   const hasPrev = currentIndex > 0
   const nextLesson = hasNext ? data.lessons[currentIndex + 1] : null
@@ -112,34 +163,72 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
   const goNext = () => {
     if (nextLesson) {
       setActiveLesson(nextLesson.title)
-      setCompleted(false)
       try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {}
     }
   }
   const goPrev = () => {
     if (prevLesson) {
       setActiveLesson(prevLesson.title)
-      setCompleted(false)
       try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {}
     }
   }
+
+  const activeSrc = data.lessons[currentIndex]?.src || `/videos/${slug}-${currentIndex >=0 ? currentIndex+1 : 1}.mp4`
 
   return (
     <AppShell withSidebar>
       <div className="flex min-h-[calc(100vh-56px)] bg-[var(--background)] -m-6 lg:-m-8 p-6 lg:p-8">
         <div className="max-w-[720px] mx-auto w-full">
-          <div className="flex items-center gap-2 text-[12px] text-[var(--text-3)] mb-4">
-            <span className="w-5 h-5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[10px]">◉</span>
-            <span>{data.breadcrumb}</span>
-            <span className="text-[var(--text-3)]">/</span>
-            <span className="text-[var(--text)]">{data.title}</span>
-          </div>
+          <nav aria-label="Breadcrumb">
+            <div className="flex items-center gap-2 text-[12px] text-[var(--text-3)] mb-4">
+              <span className="w-5 h-5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[10px]">◉</span>
+              <span>{data.breadcrumb}</span>
+              <span className="text-[var(--text-3)]">/</span>
+              <span className="text-[var(--text)]">{data.title}</span>
+            </div>
+          </nav>
           <h1 className="text-[24px] font-[700] tracking-[-0.03em] text-[var(--text)]">{activeLesson || data.title}</h1>
           <p className="mt-1 text-[12px] text-[var(--text-3)]">{data.title} • {data.lessons[currentIndex]?.subtitle || data.breadcrumb} • Lesson {currentIndex >=0 ? currentIndex+1 : 1} of {data.lessons.length}</p>
           <p className="mt-2 text-[13px] text-[var(--text-2)]">This lesson covers the foundations of cybersecurity — threats, attack surfaces, defense principles, and why this field matters.</p>
           <div className="mt-6">
-            <VideoPlayer key={activeLesson} src="/videos/cybersecurity-101-intro.mp4" onEnd={handleVideoEnd} />
+            <VideoPlayer key={activeLesson} src={activeSrc} onEnd={handleVideoEnd} />
           </div>
+
+          {/* Lesson list */}
+          <div className="mt-6 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+            <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--surface-2)] transition-colors" aria-expanded={expanded} aria-controls="lesson-list">
+              <span className="text-[13px] font-[600] text-[var(--text)]">Lessons • {data.lessons.length}</span>
+              {expanded ? <ChevronUp className="w-4 h-4 text-[var(--text-3)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-3)]" />}
+            </button>
+            {expanded && (
+              <ul id="lesson-list" className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
+                {data.lessons.map((lesson, idx) => {
+                  const isActive = lesson.title === activeLesson
+                  return (
+                    <li key={lesson.title}>
+                      <button
+                        onClick={() => setActiveLesson(lesson.title)}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--surface-2)] transition-colors ${isActive ? "bg-blue-50 dark:bg-blue-950/20 border-l-2 border-l-blue-600" : ""}`}
+                        aria-current={isActive ? "true" : undefined}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[12px] ${isActive ? "bg-blue-600 text-white" : "bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-3)]"}`}>
+                            {isActive ? <Play className="w-3.5 h-3.5 fill-white" /> : idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <div className={`text-[13px] font-[500] truncate ${isActive ? "text-blue-700 dark:text-blue-300" : "text-[var(--text)]"}`}>{lesson.title}</div>
+                            <div className="text-[11px] text-[var(--text-3)]">{lesson.subtitle} • {lesson.time}{lesson.isPractice ? " • Practice" : ""}</div>
+                          </div>
+                        </div>
+                        <span className="ml-2 text-[11px] font-mono text-[var(--text-3)] shrink-0">{lesson.time}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
           {/* Next / Previous controls */}
           <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <Button
@@ -148,6 +237,7 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
               disabled={!hasPrev}
               onClick={goPrev}
               className="h-9 gap-1.5 justify-center border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] disabled:opacity-40"
+              aria-label="Previous lesson"
             >
               <ChevronRight className="w-4 h-4 rotate-180" /> Previous
             </Button>
@@ -159,12 +249,13 @@ export default function LearnInside({ params }: { params: Promise<{ slug: string
               disabled={!hasNext}
               onClick={goNext}
               className="h-9 gap-1.5 justify-center bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 disabled:opacity-40"
+              aria-label="Next lesson"
             >
               Next video <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
           {hasNext && nextLesson && (
-            <button onClick={goNext} className="mt-3 w-full flex items-center justify-between p-3 rounded-[10px] border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-left">
+            <button onClick={goNext} className="mt-3 w-full flex items-center justify-between p-3 rounded-[10px] border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-left" aria-label={`Next lesson: ${nextLesson.title}`}>
               <div>
                 <div className="text-[11px] font-semibold tracking-widest uppercase text-blue-700 dark:text-blue-300">Next up</div>
                 <div className="text-[13px] font-[600] text-blue-900 dark:text-blue-100">{nextLesson.title} • {nextLesson.subtitle}</div>

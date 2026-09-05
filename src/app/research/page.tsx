@@ -21,9 +21,22 @@ export default function ResearchPage() {
   const [activeCat, setActiveCat] = React.useState("All")
   const [following, setFollowing] = React.useState<Set<string>>(new Set())
   const [bookmarked, setBookmarked] = React.useState<Set<string>>(new Set())
-  React.useEffect(()=>{ try{ const r=localStorage.getItem("aegis_following"); if(r) setFollowing(new Set(JSON.parse(r))); const b=localStorage.getItem("aegis_research_bookmarks"); if(b) setBookmarked(new Set(JSON.parse(b)))}catch{} },[])
-  React.useEffect(()=>{ try{ localStorage.setItem("aegis_following", JSON.stringify([...following]))}catch{}},[following])
-  React.useEffect(()=>{ try{ localStorage.setItem("aegis_research_bookmarks", JSON.stringify([...bookmarked]))}catch{}},[bookmarked])
+  const mountedRef = React.useRef(false)
+  React.useEffect(()=>{
+    try{ const r=localStorage.getItem("aegis_following"); if(r) setFollowing(new Set(JSON.parse(r))); const b=localStorage.getItem("aegis_research_bookmarks"); if(b) setBookmarked(new Set(JSON.parse(b)))}catch{}
+    mountedRef.current = true
+    return ()=> { mountedRef.current = false }
+  },[])
+  React.useEffect(()=>{
+    if(!mountedRef.current) return
+    const t = setTimeout(()=>{ try{ localStorage.setItem("aegis_following", JSON.stringify([...following]))}catch{} }, 300)
+    return ()=> clearTimeout(t)
+  },[following])
+  React.useEffect(()=>{
+    if(!mountedRef.current) return
+    const t = setTimeout(()=>{ try{ localStorage.setItem("aegis_research_bookmarks", JSON.stringify([...bookmarked]))}catch{} }, 300)
+    return ()=> clearTimeout(t)
+  },[bookmarked])
   const toggleFollow = (name:string)=> setFollowing(prev=>{ const n=new Set(prev); if(n.has(name)) n.delete(name); else n.add(name); return n })
   const toggleBookmark = (id:string)=> setBookmarked(prev=>{ const n=new Set(prev); if(n.has(id)) n.delete(id); else n.add(id); return n })
 
@@ -49,33 +62,33 @@ export default function ResearchPage() {
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" />
-                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search research, authors, tags..." className="pl-8 h-8 w-[220px] sm:w-[260px] bg-[var(--surface)]" />
-                {q && <button onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" aria-hidden="true" />
+                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search research, authors, tags..." className="pl-8 h-8 w-[220px] sm:w-[260px] bg-[var(--surface)]" aria-label="Search research" />
+                {q && <button onClick={()=>setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" aria-hidden="true" /></button>}
               </div>
               <Link href="/research/new"><Button size="sm" className="h-8 rounded-[8px]">New research</Button></Link>
             </div>
           </div>
         </FadeIn>
 
-        <div className="flex items-center gap-1.5 mb-6 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1.5 mb-6 overflow-x-auto pb-1" role="group" aria-label="Filter by category">
           {cats.map(c=> (
-            <button key={c} onClick={()=>setActiveCat(c)} className={`px-3 py-1.5 rounded-full text-[12.5px] font-[500] whitespace-nowrap border transition-colors ${c===activeCat ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]"}`}>{c}</button>
+            <button key={c} onClick={()=>setActiveCat(c)} aria-pressed={c===activeCat} aria-label={`Filter by ${c}`} className={`px-3 py-1.5 rounded-full text-[12.5px] font-[500] whitespace-nowrap border transition-colors min-h-[44px] sm:min-h-0 ${c===activeCat ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]"}`}>{c}</button>
           ))}
-          <span className="ml-2 hidden sm:inline-flex items-center gap-2 text-[12px] text-[var(--text-3)] border-l border-[var(--border)] pl-3"><TrendingUp className="w-3.5 h-3.5" /> Trending this week</span>
-          { (q || activeCat!=="All") && <Button variant="ghost" size="sm" className="h-7 ml-2 border" onClick={()=>{setQ(""); setActiveCat("All")}}>Clear</Button>}
+          <span className="ml-2 hidden sm:inline-flex items-center gap-2 text-[12px] text-[var(--text-3)] border-l border-[var(--border)] pl-3" aria-hidden="true"><TrendingUp className="w-3.5 h-3.5" aria-hidden="true" /> Trending this week</span>
+          { (q || activeCat!=="All") && <Button variant="ghost" size="sm" className="h-7 ml-2 border min-h-[44px] sm:min-h-0" onClick={()=>{setQ(""); setActiveCat("All")}} aria-label="Clear filters">Clear</Button>}
         </div>
 
         <div className="grid lg:grid-cols-[1.7fr_0.9fr] gap-6">
           <Stagger className="space-y-4">
             {filtered.length===0 ? (
-              <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center"><div className="text-[13px] font-[600]">No research matches</div><div className="text-[12px] text-[var(--text-2)]">Try different search or category.</div><Button size="sm" className="mt-3 h-8" onClick={()=>{setQ(""); setActiveCat("All")}}>Clear filters</Button></CardContent></Card>
+              <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center"><div className="text-[13px] font-[600]">No research matches</div><div className="text-[12px] text-[var(--text-2)]">Try different search or category.</div><Button size="sm" className="mt-3 h-8" onClick={()=>{setQ(""); setActiveCat("All")}} aria-label="Clear filters">Clear filters</Button></CardContent></Card>
             ) : filtered.map(a => {
               const isBm = bookmarked.has(a.id)
               return (
               <div key={a.id} className="stagger-item"><Card className={`hover:shadow-md transition-shadow ${a.featured ? "border-[var(--accent-border)]" : ""}`}>
                 <CardContent className="p-5 sm:p-6">
-                  {a.featured && <Badge variant="accent" className="mb-3 gap-1.5"><Award className="w-3 h-3" /> Staff Pick</Badge>}
+                  {a.featured && <Badge variant="accent" className="mb-3 gap-1.5"><Award className="w-3 h-3" aria-hidden="true" /> Staff Pick</Badge>}
                   <Link href={`/research/${a.id}`} className="block group">
                     <h2 className="text-[16px] sm:text-[17px] font-[650] tracking-[-0.02em] leading-tight group-hover:text-[var(--accent)] transition-colors">{a.title}</h2>
                     <p className="mt-2 text-[13px] leading-6 text-[var(--text-2)] line-clamp-2">{a.excerpt}</p>
@@ -88,7 +101,7 @@ export default function ResearchPage() {
                         <span className="text-[11px] font-mono text-[var(--text-3)]">detection / cloudtrail sigma rule</span>
                         <span className="text-[11px] font-mono text-[var(--text-3)]">yaml</span>
                       </div>
-                      <pre className="p-3 bg-[#0F1012] text-[11.5px] leading-5 font-mono text-zinc-300 overflow-x-auto">
+                      <pre className="p-3 bg-[#0F1012] text-[11.5px] leading-5 font-mono text-zinc-300 overflow-x-auto" aria-hidden="true">
                         <code>{`detection:
   selection:
     eventName: AssumeRole
@@ -100,25 +113,25 @@ export default function ResearchPage() {
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     {a.tags.map(tag => (
-                      <button key={tag} onClick={()=>setQ(tag)} className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--text)] hover:text-[var(--background)] transition-colors">#{tag}</button>
+                      <button key={tag} onClick={()=>setQ(tag)} aria-label={`Search tag ${tag}`} className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--text)] hover:text-[var(--background)] transition-colors min-h-[32px]">#{tag}</button>
                     ))}
-                    <button onClick={()=>toggleBookmark(a.id)} className={`ml-auto inline-flex items-center gap-1 text-[11px] border rounded-full px-2 py-1 ${isBm ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]"}`}>
-                      <Bookmark className={`w-3 h-3 ${isBm ? "fill-current" : ""}`} /> {isBm ? "Bookmarked" : "Bookmark"}
+                    <button onClick={()=>toggleBookmark(a.id)} aria-pressed={isBm} aria-label={isBm ? `Remove bookmark for ${a.title}` : `Bookmark ${a.title}`} className={`ml-auto inline-flex items-center gap-1 text-[11px] border rounded-full px-2 py-1 min-h-[32px] ${isBm ? "bg-[var(--text)] text-[var(--background)] border-[var(--text)]" : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--surface-2)]"}`}>
+                      <Bookmark className={`w-3 h-3 ${isBm ? "fill-current" : ""}`} aria-hidden="true" /> {isBm ? "Bookmarked" : "Bookmark"}
                     </button>
                   </div>
 
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[11px] font-semibold">{a.author.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+                      <div className="w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[11px] font-semibold" aria-hidden="true">{a.author.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
                       <div>
                         <div className="text-[12.5px] font-[500] leading-none">{a.author}</div>
                         <div className="text-[11px] text-[var(--text-3)]">{a.role} • {a.time} • {a.read} read</div>
                       </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-3 text-[11px] text-[var(--text-3)]">
-                      <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {a.views.toLocaleString()}</span>
-                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" /> {a.bookmarks + (isBm?1:0)}</span>
-                      <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {a.comments}</span>
+                    <div className="hidden sm:flex items-center gap-3 text-[11px] text-[var(--text-3)]" aria-hidden="true">
+                      <span className="flex items-center gap-1"><Eye className="w-3 h-3" aria-hidden="true" /> {a.views.toLocaleString()}</span>
+                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" aria-hidden="true" /> {a.bookmarks + (isBm?1:0)}</span>
+                      <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" aria-hidden="true" /> {a.comments}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -129,9 +142,9 @@ export default function ResearchPage() {
           <div className="space-y-4">
             <Card>
               <CardContent className="p-5">
-                <div className="text-[12px] font-semibold flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> Publish with confidence</div>
+                <div className="text-[12px] font-semibold flex items-center gap-2"><FileText className="w-3.5 h-3.5" aria-hidden="true" /> Publish with confidence</div>
                 <p className="mt-2 text-[12.5px] leading-5 text-[var(--text-2)]">Markdown, syntax highlighting, code blocks, images, diagrams, tags, authors, and related research.</p>
-                <div className="mt-3 rounded-[8px] bg-[#0F1012] p-3 font-mono text-[11px] leading-4 text-zinc-400">
+                <div className="mt-3 rounded-[8px] bg-[#0F1012] p-3 font-mono text-[11px] leading-4 text-zinc-400" aria-hidden="true">
                   <div>```python</div>
                   <div className="text-zinc-200">def detect_ioc(evt):</div>
                   <div className="text-zinc-300 pl-2">return evt.arn.contains(&quot;:&quot;)</div>
@@ -153,12 +166,12 @@ export default function ResearchPage() {
                     const isFollowing = following.has(p.name)
                     return (
                     <div key={p.name} className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-[var(--text)] text-[var(--background)] flex items-center justify-center text-[11px] font-semibold">{p.name.split(" ").map(n=>n[0]).join("")}</div>
+                      <div className="w-8 h-8 rounded-full bg-[var(--text)] text-[var(--background)] flex items-center justify-center text-[11px] font-semibold" aria-hidden="true">{p.name.split(" ").map(n=>n[0]).join("")}</div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[12.5px] font-[500] leading-none">{p.name}</div>
                         <div className="text-[11px] text-[var(--text-3)]">{p.rep} rep • {p.pubs} pubs</div>
                       </div>
-                      <Button variant={isFollowing ? "default" : "ghost"} size="sm" className="h-7 text-[11px] border border-[var(--border)]" onClick={()=>toggleFollow(p.name)}>{isFollowing ? <><Check className="w-3 h-3 mr-1" /> Following</> : "Follow"}</Button>
+                      <Button variant={isFollowing ? "default" : "ghost"} size="sm" className="h-7 text-[11px] border border-[var(--border)] min-h-[32px]" onClick={()=>toggleFollow(p.name)} aria-pressed={isFollowing} aria-label={isFollowing ? `Unfollow ${p.name}` : `Follow ${p.name}`}>{isFollowing ? <><Check className="w-3 h-3 mr-1" aria-hidden="true" /> Following</> : "Follow"}</Button>
                     </div>
                   )})}
                 </div>

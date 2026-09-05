@@ -1,5 +1,9 @@
-name = "aegis"
+name = "aegis-platform"
 compatibility_date = "2026-09-05"
+pages_build_output_dir = ".vercel/output/static"
+
+[vars]
+NODE_VERSION = "20"
 
 [pages]
-# Cloudflare Pages via next-on-pages outputs to .vercel/output
+# Cloudflare Pages via next-on-pages outputs to .vercel/output/static

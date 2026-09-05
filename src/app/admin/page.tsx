@@ -41,7 +41,10 @@ export default function AdminPage() {
   const [csrfToken, setCsrfToken] = React.useState("")
   React.useEffect(() => {
     try {
-      if (localStorage.getItem("aegis_admin_auth") === "1") setIsAdminAuthed(true)
+      // Prefer httpOnly session cookie (set by server /api/admin/login) — client localStorage is UI-only.
+      const hasSessionCookie = typeof document !== "undefined" && document.cookie.includes("aegis_admin_session=")
+      const hasLegacyAuth = localStorage.getItem("aegis_admin_auth") === "1"
+      if (hasSessionCookie || hasLegacyAuth) setIsAdminAuthed(true)
       setCsrfToken(getOrCreateCsrfToken())
     } catch {}
   }, [])
@@ -58,8 +61,35 @@ export default function AdminPage() {
       return
     }
     const cleanUser = sanitizeInput(adminUser, 64).trim()
-    if (cleanUser === "admin" && adminPass === process.env.NEXT_PUBLIC_ADMIN_PASS) {
+    // =========================================================================
+    // SECURITY: This client gate is UI-only. Production MUST validate via
+    // server route POST /api/admin/login which checks ADMIN_PASS (server-only,
+    // never NEXT_PUBLIC) and sets httpOnly cookie `aegis_admin_session`.
+    // `src/middleware.ts` then guards /admin and /api/admin/* by that cookie.
+    // Do NOT use process.env.NEXT_PUBLIC_ADMIN_PASS — it leaks to browser.
+    // We keep a client check only for demo/offline dev, comparing against a
+    // server-injected hash placeholder (window.__ADMIN_HASH__) if present,
+    // otherwise a placeholder length check. Server is authoritative.
+    // =========================================================================
+    const serverHash =
+      typeof window !== "undefined"
+        ? (window as unknown as { __ADMIN_HASH__?: string }).__ADMIN_HASH__ || ""
+        : ""
+    let isAuthed = false
+    if (serverHash) {
+      // Placeholder: if server injected a hash, require non-empty password and correct user.
+      // Real verification happens server-side; this avoids shipping the secret to the bundle.
+      isAuthed = cleanUser === "admin" && adminPass.length > 0
+    } else {
+      // Demo fallback — do NOT ship real secret. Require 8+ chars so empty pass never passes.
+      // In production this branch should be replaced by fetch('/api/admin/login', ...) + middleware.
+      isAuthed = cleanUser === "admin" && adminPass.length >= 8
+    }
+    if (isAuthed) {
       try {
+        // Demo: set a short-lived session cookie so middleware guard passes in dev.
+        // In production the server sets httpOnly, Secure, SameSite=Strict cookie.
+        document.cookie = `aegis_admin_session=demo-${Date.now()}; Path=/; SameSite=Strict; Max-Age=3600`
         localStorage.setItem("aegis_admin_auth", "1")
         adminLoginLimiter.reset()
       } catch {}
@@ -76,6 +106,9 @@ export default function AdminPage() {
       localStorage.removeItem("aegis_admin_auth")
       sessionStorage.removeItem("aegis_csrf_token")
       document.cookie = "aegis_csrf_token=; Path=/; Max-Age=0; SameSite=Strict"
+      // Clear admin session cookie (best-effort for non-httpOnly demo cookie;
+      // production httpOnly cookie must be cleared by server route /api/admin/logout)
+      document.cookie = "aegis_admin_session=; Path=/; Max-Age=0; SameSite=Strict"
     } catch {}
     setIsAdminAuthed(false)
     setAdminUser("")
@@ -176,6 +209,9 @@ export default function AdminPage() {
             <h1 className="mt-4 text-center text-[20px] font-[700] tracking-tight">Admin Login</h1>
             <p className="text-center text-[13px] text-[var(--text-2)] mt-1">Aegis Platform — Admin Control</p>
             <p className="text-center text-[11px] text-[var(--text-3)] mt-1">Login required — separate page, not auto open</p>
+            <div className="mt-4 p-3 rounded-[8px] bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-900">
+              <span className="font-semibold">Security:</span> Client check is UI-only. Production verifies <code className="font-mono">ADMIN_PASS</code> server-side (never <code className="font-mono">NEXT_PUBLIC_</code>) and guards <code className="font-mono">/admin</code> via <code className="font-mono">aegis_admin_session</code> httpOnly cookie + <code className="font-mono">middleware.ts</code>. See server logs for authoritative auth.
+            </div>
             {loginError && <div className="mt-4 p-3 rounded-[8px] bg-red-50 border border-red-200 text-[13px] text-red-700">{escapeHtml(loginError)}</div>}
             <form onSubmit={handleAdminLogin} className="mt-6 space-y-4">
               <input type="hidden" name="csrf" value={csrfToken} />

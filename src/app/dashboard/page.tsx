@@ -10,21 +10,43 @@ import { Stagger, FadeIn, CountUp, ProgressAnimated } from "@/components/ui/stag
 import { Clock, Target, Trophy, FlaskConical, BookOpen, Zap, ArrowRight, CheckCircle2, Play, Calendar, Award, TrendingUp, Wrench, Shield, ExternalLink } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 
+type ProgressState = { pct: number; completed: number; total: number; hasActivity: boolean }
+
+function validateProgress(raw: unknown): ProgressState {
+  const fallback: ProgressState = { pct: 0, completed: 0, total: 32, hasActivity: false }
+  if (!raw || typeof raw !== "object") return fallback
+  const p = raw as Record<string, unknown>
+  let pct = typeof p.pct === "number" ? p.pct : Number(p.pct)
+  let completed = typeof p.completed === "number" ? p.completed : Number(p.completed)
+  let total = typeof p.total === "number" ? p.total : Number(p.total)
+  if (!Number.isFinite(pct)) pct = 0
+  if (!Number.isFinite(completed)) completed = 0
+  if (!Number.isFinite(total)) total = 32
+  pct = Math.min(100, Math.max(0, Math.round(pct)))
+  completed = Math.min(total, Math.max(0, Math.round(completed)))
+  total = Math.min(1000, Math.max(1, Math.round(total)))
+  if (completed > total) completed = total
+  // ensure pct consistent with completed/total if pct looks derived
+  return { pct, completed, total, hasActivity: completed > 0 }
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
-  const displayName = user?.name || "Notva Laka"
-  const firstName = displayName.trim().split(/\s+/)[0] || "Notva"
-  const [real] = React.useState(() => {
-    if (typeof window === "undefined") return { pct: 0, completed: 0, total: 32, hasActivity: false }
+  const displayName = user?.name || "Guest"
+  const firstName = displayName.trim().split(/\s+/)[0] || "Guest"
+  const [real, setReal] = React.useState<ProgressState>({ pct: 0, completed: 0, total: 32, hasActivity: false })
+  const [progressLoading, setProgressLoading] = React.useState(true)
+
+  React.useEffect(() => {
     try {
       const raw = localStorage.getItem("aegis_progress")
       if (raw) {
-        const p = JSON.parse(raw)
-        return { pct: p.pct ?? 0, completed: p.completed ?? 0, total: p.total ?? 32, hasActivity: (p.completed ?? 0) > 0 }
+        const parsed = JSON.parse(raw)
+        setReal(validateProgress(parsed))
       }
     } catch {}
-    return { pct: 0, completed: 0, total: 32, hasActivity: false }
-  })
+    setProgressLoading(false)
+  }, [])
 
   return (
     <AppShell withSidebar>
@@ -38,7 +60,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="rounded-full gap-1.5 px-3 py-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Streak: 12 days
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Streak: 12 days
               </Badge>
               <Link href="/learn"><Button size="sm" className="rounded-[8px]">Continue</Button></Link>
             </div>
@@ -49,31 +71,31 @@ export default function DashboardPage() {
         <FadeIn delay={60}>
           <Card className="mb-6">
             <CardContent className="p-3 sm:p-3.5 flex flex-wrap items-center justify-start gap-2">
-              <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mr-1 hidden sm:inline shrink-0">Quick actions</span>
-              <span className="hidden sm:block h-4 w-px bg-[var(--border)] mr-1 shrink-0" />
+              <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mr-1 hidden sm:inline shrink-0" aria-hidden="true">Quick actions</span>
+              <span className="hidden sm:block h-4 w-px bg-[var(--border)] mr-1 shrink-0" aria-hidden="true" />
               <Link href="/labs">
                 <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <FlaskConical className="w-3.5 h-3.5" /> Labs
+                  <FlaskConical className="w-3.5 h-3.5" aria-hidden="true" /> Labs
                 </Button>
               </Link>
               <Link href="/challenges">
                 <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <Trophy className="w-3.5 h-3.5" /> Challenges
+                  <Trophy className="w-3.5 h-3.5" aria-hidden="true" /> Challenges
                 </Button>
               </Link>
               <Link href="/tools">
                 <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <Wrench className="w-3.5 h-3.5" /> Tools
+                  <Wrench className="w-3.5 h-3.5" aria-hidden="true" /> Tools
                 </Button>
               </Link>
               <Link href="/learn">
                 <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <BookOpen className="w-3.5 h-3.5" /> Academy
+                  <BookOpen className="w-3.5 h-3.5" aria-hidden="true" /> Academy
                 </Button>
               </Link>
               <Link href="/research">
                 <Button variant="secondary" size="sm" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 rounded-full gap-1.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <BookOpen className="w-3.5 h-3.5" /> Research
+                  <BookOpen className="w-3.5 h-3.5" aria-hidden="true" /> Research
                 </Button>
               </Link>
               <span className="ml-auto hidden lg:inline text-[11px] text-[var(--text-3)] shrink-0">Jump to where you left off • <Link href="/labs/sql-injection" className="font-medium text-[var(--text-2)] hover:text-[var(--text)] underline decoration-[var(--border-strong)] underline-offset-4">SQL Injection Lab</Link></span>
@@ -98,39 +120,47 @@ export default function DashboardPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between gap-4">
-                    <CardTitle className="flex items-center gap-2 leading-none"><BookOpen className="w-4 h-4 text-[var(--text-3)]" /> Continue your learning</CardTitle>
-                    <Link href="/learn" className="inline-flex items-center text-[12px] font-medium text-[var(--accent)] hover:underline leading-none self-center gap-1">View all <ArrowRight className="w-3 h-3" /></Link>
+                    <h2 className="flex items-center gap-2 leading-none text-[14px] font-[600]"><BookOpen className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Continue your learning</h2>
+                    <Link href="/learn" className="inline-flex items-center text-[12px] font-medium text-[var(--accent)] hover:underline leading-none self-center gap-1">View all <ArrowRight className="w-3 h-3" aria-hidden="true" /></Link>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="rounded-[10px] border border-[var(--border)] p-4 bg-[var(--surface-2)]">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex gap-3 min-w-0 flex-1">
-                        <div className="w-10 h-10 rounded-[9px] bg-[#7C3AED] text-white flex items-center justify-center shrink-0">
-                          <BookOpen className="w-4 h-4" />
+                        <div className="w-10 h-10 rounded-[9px] bg-[#7C3AED] text-white flex items-center justify-center shrink-0" aria-hidden="true">
+                          <BookOpen className="w-4 h-4" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-[13.5px] font-[600] tracking-[-0.015em]">Web Application Security</div>
+                          <h3 className="text-[13.5px] font-[600] tracking-[-0.015em]">Web Application Security</h3>
                           <div className="text-[12px] text-[var(--text-2)]">Intermediate • 32 lessons • 28h estimated</div>
                           <div className="mt-2 flex items-center gap-2">
-                            <div className="flex-1 max-w-[180px] w-full h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)] shrink-0">
-                              <ProgressAnimated value={real.pct} />
+                            <div className="flex-1 max-w-[180px] w-full h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)] shrink-0" role="progressbar" aria-valuenow={progressLoading ? undefined : real.pct} aria-valuemin={0} aria-valuemax={100} aria-label="Course progress">
+                              {progressLoading ? (
+                                <div className="h-full w-full bg-[var(--surface-3)] animate-pulse" />
+                              ) : (
+                                <ProgressAnimated value={real.pct} />
+                              )}
                             </div>
-                            <span className="text-[11px] font-mono text-[var(--text-3)] font-medium tabular-nums"><CountUp value={real.pct} />%</span>
-                            <span className="text-[11px] text-[var(--text-3)]">• {real.completed}/{real.total} lessons</span>
-                            {!real.hasActivity && <span className="text-[11px] text-amber-600">• No lessons yet</span>}
+                            {progressLoading ? (
+                              <span className="text-[11px] font-mono text-[var(--text-3)] font-medium tabular-nums animate-pulse">--%</span>
+                            ) : (
+                              <span className="text-[11px] font-mono text-[var(--text-3)] font-medium tabular-nums"><CountUp value={real.pct} />%</span>
+                            )}
+                            <span className="text-[11px] text-[var(--text-3)]">• {progressLoading ? "--/--" : `${real.completed}/${real.total}`} lessons</span>
+                            {!progressLoading && !real.hasActivity && <span className="text-[11px] text-amber-600">• No lessons yet</span>}
                           </div>
                         </div>
                       </div>
-                      <Link href="/learn/web-security"><Button size="sm" className="shrink-0 rounded-[8px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-900 dark:border-zinc-700 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Continue <ArrowRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/learn/web-security"><Button size="sm" className="shrink-0 rounded-[8px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-900 dark:border-zinc-700 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Continue <ArrowRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" /></Button></Link>
                     </div>
                   </div>
 
                   <div>
-                    <div className="text-[12px] font-semibold tracking-wide text-[var(--text-2)] mb-2">Recommended next step</div>
+                    <h3 className="text-[12px] font-semibold tracking-wide text-[var(--text-2)] mb-2">Recommended next step</h3>
                     <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-[8px] bg-zinc-800 text-white flex items-center justify-center shrink-0">
-                        <FlaskConical className="w-4 h-4" />
+                      <div className="w-9 h-9 rounded-[8px] bg-zinc-800 text-white flex items-center justify-center shrink-0" aria-hidden="true">
+                        <FlaskConical className="w-4 h-4" aria-hidden="true" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-[600]">Linux Privilege Escalation</div>
@@ -140,7 +170,7 @@ export default function DashboardPage() {
                           <span className="text-[11px] text-[var(--text-3)]">Not started • 90 min • Next in path</span>
                         </div>
                       </div>
-                      <Link href="/labs/lab-2"><Button size="sm" variant="secondary" className="shrink-0 rounded-[8px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Start <ArrowRight className="w-3.5 h-3.5 ml-1" /></Button></Link>
+                      <Link href="/labs/lab-2"><Button size="sm" variant="secondary" className="shrink-0 rounded-[8px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Start <ArrowRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" /></Button></Link>
                     </div>
                   </div>
                 </CardContent>
@@ -151,19 +181,19 @@ export default function DashboardPage() {
             <FadeIn delay={100}>
               <Card>
                 <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-                  <CardTitle className="flex items-center gap-2"><FlaskConical className="w-4 h-4 text-[var(--text-3)]" /> Labs in progress</CardTitle>
+                  <h2 className="flex items-center gap-2 text-[14px] font-[600]"><FlaskConical className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Labs in progress</h2>
                   <Link href="/labs" className="text-[12px] font-medium text-[var(--text-2)] hover:text-[var(--text)]">Browse labs →</Link>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {labs.filter(l => l.status === "in_progress").map(lab => (
                     <div key={lab.id} className="flex items-center gap-3 p-3 rounded-[10px] border border-[var(--border)] hover:shadow-sm transition-shadow">
-                      <div className="w-8 h-8 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center shrink-0">
-                        <Target className="w-3.5 h-3.5 text-[var(--text-2)]" />
+                      <div className="w-8 h-8 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center shrink-0" aria-hidden="true">
+                        <Target className="w-3.5 h-3.5 text-[var(--text-2)]" aria-hidden="true" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-[550] truncate">{lab.title}</div>
                         <div className="text-[11px] text-[var(--text-2)]">{lab.category} • {lab.difficulty} • {lab.duration}</div>
-                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[var(--surface-3)]">
+                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[var(--surface-3)]" role="progressbar" aria-valuenow={lab.progress ?? 0} aria-valuemin={0} aria-valuemax={100} aria-label={`${lab.title} progress`}>
                           <ProgressAnimated value={lab.progress ?? 0} />
                         </div>
                       </div>
@@ -176,8 +206,8 @@ export default function DashboardPage() {
                   {labs.filter(l=>l.status==="in_progress").length===0 && (
                     <Card className="border-dashed rounded-[12px] bg-[var(--surface-2)]">
                       <CardContent className="p-6 text-center">
-                        <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto">
-                          <FlaskConical className="w-5 h-5 text-[var(--text-2)]" />
+                        <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mx-auto" aria-hidden="true">
+                          <FlaskConical className="w-5 h-5 text-[var(--text-2)]" aria-hidden="true" />
                         </div>
                         <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em] text-[var(--text)]">No labs in progress</div>
                         <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[320px] mx-auto">Pick a lab to start practicing. Your active labs will appear here with progress.</div>
@@ -193,15 +223,15 @@ export default function DashboardPage() {
             <FadeIn delay={120}>
               <Card>
                 <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-                  <CardTitle className="flex items-center gap-2"><Trophy className="w-4 h-4 text-[var(--text-3)]" /> Challenge activity</CardTitle>
+                  <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Trophy className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Challenge activity</h2>
                   <Badge variant="secondary">{challenges.filter(c=>c.status==="solved").length} solved</Badge>
                 </CardHeader>
                 <CardContent>
                   <Stagger className="grid grid-cols-1 sm:grid-cols-2 gap-2" selector=".stagger-item">
                     {challenges.slice(0,4).map(c => (
                       <div key={c.id} className="stagger-item p-3 rounded-[10px] border border-[var(--border)] flex items-center gap-3">
-                        <div className={`w-7 h-7 rounded-[7px] flex items-center justify-center shrink-0 ${c.status==="solved" ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30" : "bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-3)]"}`}>
-                          {c.status==="solved" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Trophy className="w-3.5 h-3.5" />}
+                        <div className={`w-7 h-7 rounded-[7px] flex items-center justify-center shrink-0 ${c.status==="solved" ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30" : "bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-3)]"}`} aria-hidden="true">
+                          {c.status==="solved" ? <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" /> : <Trophy className="w-3.5 h-3.5" aria-hidden="true" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-[12.5px] font-[550] truncate">{c.name}</div>
@@ -222,7 +252,7 @@ export default function DashboardPage() {
             <FadeIn delay={90}>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2"><TrendingUp className="w-4 h-4 text-[var(--text-3)]" /> Skill Progress</CardTitle>
+                  <h2 className="flex items-center gap-2 text-[14px] font-[600]"><TrendingUp className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Skill Progress</h2>
                   <CardDescription>Track advancement across core domains.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -232,7 +262,7 @@ export default function DashboardPage() {
                         <span className="text-[12.5px] font-[500]">{s.name}</span>
                         <span className="text-[11px] font-mono text-[var(--text-3)]"><CountUp value={s.progress} />% • {s.level}</span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]" role="progressbar" aria-valuenow={s.progress} aria-valuemin={0} aria-valuemax={100} aria-label={`${s.name} progress`}>
                         <ProgressAnimated value={s.progress} />
                       </div>
                       <div className="mt-1 text-[11px] text-[var(--text-3)]">Next: {s.next}</div>
@@ -247,7 +277,7 @@ export default function DashboardPage() {
             <FadeIn delay={110}>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2"><Zap className="w-4 h-4 text-amber-500" /> Reputation</CardTitle>
+                  <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Zap className="w-4 h-4 text-amber-500" aria-hidden="true" /> Reputation</h2>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
@@ -269,7 +299,7 @@ export default function DashboardPage() {
             <FadeIn delay={130}>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2"><Award className="w-4 h-4 text-[var(--text-3)]" /> Recent achievements</CardTitle>
+                  <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Award className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Recent achievements</h2>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {[
@@ -278,11 +308,11 @@ export default function DashboardPage() {
                     { title: "7-Day Streak", desc: "Consistent daily practice", time: "3 days ago", icon: "🔥" },
                   ].map(a => (
                     <div key={a.title} className="flex gap-3 p-2.5 rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)]">
-                      <div className="w-8 h-8 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[14px] shrink-0">{a.icon}</div>
+                      <div className="w-8 h-8 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[14px] shrink-0" aria-hidden="true">{a.icon}</div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[12.5px] font-[600] leading-none">{a.title}</div>
                         <div className="text-[11px] text-[var(--text-2)]">{a.desc}</div>
-                        <div className="text-[11px] text-[var(--text-3)] mt-1 flex items-center gap-1"><Clock className="w-3 h-3" />{a.time}</div>
+                        <div className="text-[11px] text-[var(--text-3)] mt-1 flex items-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" />{a.time}</div>
                       </div>
                     </div>
                   ))}
@@ -294,11 +324,11 @@ export default function DashboardPage() {
             <FadeIn delay={140}>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2"><Calendar className="w-4 h-4 text-[var(--text-3)]" /> Upcoming</CardTitle>
+                  <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Calendar className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Upcoming</h2>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="p-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-                    <div className="text-[12.5px] font-[600]">Winter CTF 2026</div>
+                    <h3 className="text-[12.5px] font-[600]">Winter CTF 2026</h3>
                     <div className="text-[11px] text-[var(--text-2)]">Team competition • 48 hours • Starts in 6 days</div>
                     <div className="mt-2 flex items-center gap-2">
                       <Badge variant="accent" className="text-[11px]">Registered</Badge>
@@ -316,10 +346,10 @@ export default function DashboardPage() {
         <FadeIn delay={80}>
           <Card className="mt-6 overflow-hidden">
             <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 gap-4">
-              <CardTitle className="flex items-center gap-2"><Shield className="w-4 h-4 text-[var(--text-3)]" /> Threat intel — Recent CVEs</CardTitle>
+              <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Shield className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Threat intel — Recent CVEs</h2>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex">Source: NVD • Updated 2h ago</Badge>
-                <Link href="/research" className="text-[12px] font-medium text-[var(--accent)] hover:underline hidden sm:inline-flex items-center gap-1">View intel <ExternalLink className="w-3 h-3" /></Link>
+                <Link href="/research" className="text-[12px] font-medium text-[var(--accent)] hover:underline hidden sm:inline-flex items-center gap-1">View intel <ExternalLink className="w-3 h-3" aria-hidden="true" /></Link>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -369,7 +399,7 @@ export default function DashboardPage() {
               </div>
               <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--surface-2)]/50 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                 <span className="text-[var(--text-3)]">Showing 4 of 12 tracked • Sorted by severity • Restrained signal only</span>
-                <Link href="/research" className="font-medium text-[var(--text-2)] hover:text-[var(--text)] inline-flex items-center gap-1">Open intel feed <ArrowRight className="w-3 h-3" /></Link>
+                <Link href="/research" className="font-medium text-[var(--text-2)] hover:text-[var(--text)] inline-flex items-center gap-1">Open intel feed <ArrowRight className="w-3 h-3" aria-hidden="true" /></Link>
               </div>
             </CardContent>
           </Card>
@@ -379,25 +409,25 @@ export default function DashboardPage() {
         <FadeIn delay={60}>
           <Card className="mt-6">
             <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-              <CardTitle>Recent activity</CardTitle>
+              <h2 className="text-[14px] font-[600]">Recent activity</h2>
               <span className="text-[11px] text-[var(--text-3)]">Last 7 days</span>
             </CardHeader>
             <CardContent>
               <div className="divide-y divide-[var(--border)]">
                 {[
-                  { action: "Completed lab", target: "Network Traffic Analysis", meta: "Earned 120 XP • 2 hours ago", color: "bg-emerald-500" },
-                  { action: "Solved challenge", target: "Auth Bypass (Web • 100 pts)", meta: "First blood bonus • 5 hours ago", color: "bg-blue-500" },
-                  { action: "Published research", target: "Abusing IAM Trust Policies", meta: "12 bookmarks in 24h • Yesterday", color: "bg-purple-500" },
-                  { action: "Joined team", target: "Red Team — Atlas activity", meta: "Team rank improved to #12 • 2 days ago", color: "bg-amber-500" },
-                  { action: "Earned certificate", target: "Web Security — Intermediate", meta: "Verified credential • 3 days ago", color: "bg-zinc-800" },
+                  { action: "Completed lab", target: "Network Traffic Analysis", meta: "Earned 120 XP • 2 hours ago", color: "bg-emerald-500", href: "/labs/lab-6" },
+                  { action: "Solved challenge", target: "Auth Bypass (Web • 100 pts)", meta: "First blood bonus • 5 hours ago", color: "bg-blue-500", href: "/challenges/ch-1" },
+                  { action: "Published research", target: "Abusing IAM Trust Policies", meta: "12 bookmarks in 24h • Yesterday", color: "bg-purple-500", href: "/research/1" },
+                  { action: "Joined team", target: "Red Team — Atlas activity", meta: "Team rank improved to #12 • 2 days ago", color: "bg-amber-500", href: "/teams" },
+                  { action: "Earned certificate", target: "Web Security — Intermediate", meta: "Verified credential • 3 days ago", color: "bg-zinc-800", href: "/achievements" },
                 ].map((row, i) => (
                   <div key={i} className="flex items-center gap-3 py-3">
-                    <span className={`w-1.5 h-1.5 rounded-full ${row.color} shrink-0`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${row.color} shrink-0`} aria-hidden="true" />
                     <div className="flex-1 min-w-0">
                       <span className="text-[13px] text-[var(--text-2)]">{row.action}</span> <span className="text-[13px] font-[550] text-[var(--text)]">{row.target}</span>
                       <div className="text-[11px] text-[var(--text-3)]">{row.meta}</div>
                     </div>
-                    <ChevronLink />
+                    <ChevronLink href={row.href} label={`Open ${row.target}`} />
                   </div>
                 ))}
               </div>
@@ -435,11 +465,11 @@ function UpcomingReserveCard(){
     <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] text-center">
       <div className="text-[12px] font-medium">SOC Simulation — Feb 22</div>
       <div className="text-[11px] text-[var(--text-2)]">Live detection engineering workshop {reserved && <span className="text-emerald-600">• Reserved</span>}</div>
-      <Button size="sm" variant={reserved?"default":"secondary"} className="mt-2 h-9 sm:h-7 min-h-[36px] sm:min-h-0 text-[12px]" onClick={toggle}>{reserved?"✓ Reserved — Cancel?":"Reserve seat"}</Button>
+      <Button size="sm" variant={reserved?"default":"secondary"} className="mt-2 h-9 sm:h-7 min-h-[36px] sm:min-h-0 text-[12px]" onClick={toggle} aria-pressed={reserved} aria-label={reserved ? "Cancel reservation for SOC Simulation" : "Reserve seat for SOC Simulation"}>{reserved?"✓ Reserved — Cancel?":"Reserve seat"}</Button>
     </div>
   )
 }
 
-function ChevronLink() {
-  return <Link href="/labs/sql-injection" className="w-9 h-9 sm:w-7 sm:h-7 min-h-[36px] sm:min-h-0 min-w-[36px] sm:min-w-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" /></Link>
+function ChevronLink({ href, label }: { href: string, label: string }) {
+  return <Link href={href} aria-label={label} className="w-9 h-9 sm:w-7 sm:h-7 min-h-[36px] sm:min-h-0 min-w-[36px] sm:min-w-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /></Link>
 }

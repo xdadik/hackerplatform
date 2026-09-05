@@ -34,13 +34,14 @@ export default function LearnPage() {
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               <div className="relative w-full sm:w-auto">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" />
-                <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, lessons..." className="pl-8 h-11 sm:h-8 w-full sm:w-[260px] bg-[var(--surface)] min-h-[44px] sm:min-h-0" />
-                {q && <button onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
+                <label htmlFor="course-search" className="sr-only">Search courses</label>
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-3)]" aria-hidden="true" />
+                <Input id="course-search" aria-label="Search courses" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, lessons..." className="pl-8 h-11 sm:h-8 w-full sm:w-[260px] bg-[var(--surface)] min-h-[44px] sm:min-h-0" />
+                {q && <button aria-label="Clear search" onClick={()=>setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[var(--surface-2)]"><X className="w-3 h-3" /></button>}
               </div>
-              <div className="flex items-center gap-1 p-1 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] overflow-x-auto">
+              <div className="flex items-center gap-1 p-1 rounded-[8px] bg-[var(--surface-2)] border border-[var(--border)] overflow-x-auto" role="group" aria-label="Filter by level">
                 {["All","Beginner","Intermediate","Advanced"].map(l=>(
-                  <button key={l} onClick={()=>setLevelFilter(l)} className={`px-2.5 py-2 sm:py-1 rounded-[6px] text-[12px] font-[500] min-h-[36px] sm:min-h-0 whitespace-nowrap ${levelFilter===l ? "bg-[var(--surface)] border border-[var(--border)] shadow-sm" : "text-[var(--text-2)]"}`}>{l}</button>
+                  <button key={l} onClick={()=>setLevelFilter(l)} aria-pressed={levelFilter===l} aria-label={`Filter ${l}`} className={`px-2.5 py-2 sm:py-1 rounded-[6px] text-[12px] font-[500] min-h-[36px] sm:min-h-0 whitespace-nowrap ${levelFilter===l ? "bg-[var(--surface)] border border-[var(--border)] shadow-sm" : "text-[var(--text-2)]"}`}>{l}</button>
                 ))}
               </div>
             </div>
@@ -54,7 +55,11 @@ export default function LearnPage() {
         </div>
 
         <Stagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {filtered.map(path => (
+          {filtered.map(path => {
+            const pathIndex = learningPaths.findIndex(p => p.id === path.id)
+            const nextPath = learningPaths[pathIndex + 1] ?? learningPaths[pathIndex - 1] ?? null
+            const nextLabel = path.progress === 0 ? "Prerequisites: None" : path.progress === 100 ? "Completed" : nextPath ? `Next: ${nextPath.name}` : `In progress • ${path.progress}%`
+            return (
             <div key={path.id} className="stagger-item"><Card className="group hover:shadow-md hover:-translate-y-[1px] transition-all h-full">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -67,9 +72,9 @@ export default function LearnPage() {
                 </div>
                 <div className="text-[14px] font-[600] tracking-[-0.015em]">{path.name}</div>
                 <div className="mt-1 text-[12px] text-[var(--text-2)]">{path.lessons} lessons • {path.duration} • {path.level}</div>
-                <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]"><ProgressAnimated value={path.progress} /></div>
+                <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]" role="progressbar" aria-valuenow={path.progress} aria-valuemin={0} aria-valuemax={100} aria-label={`${path.name} progress`}><ProgressAnimated value={path.progress} /></div>
                 <div className="mt-2 flex items-center justify-between text-[11px]">
-                  <span className="text-[var(--text-3)]">{path.progress === 0 ? "Prerequisites: None" : path.progress === 100 ? "Completed" : `Next: ${learningPaths[0].name}`}</span>
+                  <span className="text-[var(--text-3)]">{nextLabel}</span>
                   <span className="font-mono text-[var(--text-3)]">{path.progress}%</span>
                 </div>
                 <Link href={`/learn/${path.id}`} className="mt-4 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--text)] group-hover:gap-1.5 transition-all">
@@ -77,9 +82,12 @@ export default function LearnPage() {
                 </Link>
               </CardContent>
             </Card></div>
-          ))}
+            )
+          })}
           {filtered.length===0 && (
-            <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center col-span-full"><div className="text-[13px] font-[600]">No courses match</div><div className="text-[12px] text-[var(--text-2)]">Try different search or level filter.</div><Button size="sm" className="mt-3 h-9 sm:h-7 min-h-[36px] sm:min-h-0" onClick={()=>{setQ(""); setLevelFilter("All")}}>Clear filters</Button></CardContent></Card>
+            <div className="col-span-full">
+              <Card className="border-dashed bg-[var(--surface-2)]"><CardContent className="p-6 text-center"><div className="text-[13px] font-[600]">No courses match</div><div className="text-[12px] text-[var(--text-2)]">Try different search or level filter.</div><Button size="sm" className="mt-3 h-9 sm:h-7 min-h-[36px] sm:min-h-0" onClick={()=>{setQ(""); setLevelFilter("All")}}>Clear filters</Button></CardContent></Card>
+            </div>
           )}
         </Stagger>
 
@@ -101,7 +109,7 @@ export default function LearnPage() {
                 <div key={s.skill} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
                   <div className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)]">{s.skill}</div>
                   <div className="mt-1 text-[12px] font-[600]">{s.level} → {s.next}</div>
-                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[var(--surface-3)]"><ProgressAnimated value={s.pct} /></div>
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[var(--surface-3)]" role="progressbar" aria-valuenow={s.pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${s.skill} progress`}><ProgressAnimated value={s.pct} /></div>
                   <div className="mt-1 text-[11px] font-mono text-[var(--text-3)]">{s.pct}%</div>
                 </div>
               ))}

@@ -1,5 +1,6 @@
 "use client"
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { sanitizeInput, sanitizeEmail } from "@/lib/sanitize"
 
 export type AegisUser = {
@@ -12,6 +13,7 @@ export type AegisUser = {
 
 type AuthContextType = {
   isLoggedIn: boolean
+  isLoading: boolean
   user: AegisUser | null
   login: (email?: string, name?: string) => void
   logout: () => void
@@ -25,11 +27,15 @@ function deriveName(email?: string, explicitName?: string): string {
     const sanitized = sanitizeInput(explicitName, 64)
     if (sanitized) return sanitized
   }
-  if (!email) return "Notva Laka"
-  const local = email.split("@")[0] || ""
+  if (!email) return "Guest"
+  const trimmed = email.trim()
+  if (!trimmed) return "Guest"
+  const local = trimmed.split("@")[0] || ""
   const parts = local.split(/[._-]+/).filter(Boolean)
-  if (parts.length === 0) return "User"
-  return sanitizeInput(parts.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" "), 64)
+  if (parts.length === 0) return "Guest"
+  const joined = parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")
+  const sanitized = sanitizeInput(joined, 64)
+  return sanitized || "Guest"
 }
 
 function normalizePlan(raw: string | null): AegisUser["plan"] {
@@ -37,46 +43,139 @@ function normalizePlan(raw: string | null): AegisUser["plan"] {
   return "free"
 }
 
+function isValidAegisUser(obj: unknown): obj is AegisUser {
+  if (!obj || typeof obj !== "object") return false
+  const o = obj as Record<string, unknown>
+  return typeof o.email === "string" && !!sanitizeEmail(o.email) && typeof o.name === "string" && !!o.name.trim()
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AegisUser | null>(null)
   const [isLoggedIn, setIsLoggedIn] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
+  const router = useRouter()
 
+  // Hydration-safe: only read localStorage inside useEffect
   React.useEffect(() => {
-    try {
-      const rawUser = localStorage.getItem("aegis_user")
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser) as AegisUser
-        if (parsed?.email && parsed?.name) {
-          setUser(parsed)
-          setIsLoggedIn(true)
-          // keep legacy keys in sync for paid checks
-          localStorage.setItem("aegis_auth", "1")
-          localStorage.setItem("aegis_email", parsed.email)
-          localStorage.setItem("aegis_plan", parsed.plan)
-          if (parsed.provider) localStorage.setItem("aegis_provider", parsed.provider)
+    let cancelled = false
+
+    function syncFromStorage() {
+      try {
+        const rawUser = localStorage.getItem("aegis_user")
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser) as unknown
+          if (isValidAegisUser(parsed)) {
+            const email = sanitizeEmail((parsed as AegisUser).email)
+            if (!email) {
+              // Invalid email -> not logged in, clear poisoned data
+              if (!cancelled) {
+                setUser(null)
+                setIsLoggedIn(false)
+              }
+              return
+            }
+            const normalized: AegisUser = {
+              email,
+              name: sanitizeInput((parsed as AegisUser).name, 64) || deriveName(email),
+              plan: normalizePlan((parsed as AegisUser).plan ?? localStorage.getItem("aegis_plan")),
+              createdAt: (parsed as AegisUser).createdAt || new Date().toISOString(),
+              provider: (parsed as AegisUser).provider === "google" ? "google" : "email",
+            }
+            if (!cancelled) {
+              setUser(normalized)
+              setIsLoggedIn(true)
+            }
+            // keep legacy keys in sync for paid checks (but only when valid)
+            try {
+              localStorage.setItem("aegis_auth", "1")
+              localStorage.setItem("aegis_email", email)
+              localStorage.setItem("aegis_plan", normalized.plan)
+              if (normalized.provider) localStorage.setItem("aegis_provider", normalized.provider)
+              else localStorage.removeItem("aegis_provider")
+            } catch {}
+            return
+          } else {
+            // invalid structure -> clear
+            try {
+              localStorage.removeItem("aegis_user")
+            } catch {}
+          }
+        }
+
+        // migrate legacy aegis_auth / aegis_email — but STRICT: require valid email
+        const legacyAuth = localStorage.getItem("aegis_auth")
+        const legacyEmailRaw = localStorage.getItem("aegis_email")
+        const legacyPlan = normalizePlan(localStorage.getItem("aegis_plan"))
+        const legacyProvider = localStorage.getItem("aegis_provider") as AegisUser["provider"] | null
+
+        if (legacyAuth === "1") {
+          const sanitizedLegacyEmail = legacyEmailRaw ? sanitizeEmail(legacyEmailRaw) : null
+          if (!sanitizedLegacyEmail) {
+            // No valid email -> do NOT auto-bypass. Clear stale auth flag and remain logged out.
+            try {
+              localStorage.removeItem("aegis_auth")
+              localStorage.removeItem("aegis_email")
+              localStorage.removeItem("aegis_provider")
+            } catch {}
+            if (!cancelled) {
+              setUser(null)
+              setIsLoggedIn(false)
+            }
+            return
+          }
+          const name = deriveName(sanitizedLegacyEmail)
+          const migrated: AegisUser = {
+            email: sanitizedLegacyEmail,
+            name,
+            plan: legacyPlan,
+            createdAt: new Date().toISOString(),
+            provider: legacyProvider === "google" ? "google" : "email",
+          }
+          try {
+            localStorage.setItem("aegis_user", JSON.stringify(migrated))
+          } catch {}
+          if (!cancelled) {
+            setUser(migrated)
+            setIsLoggedIn(true)
+          }
           return
         }
-      }
-      // migrate legacy aegis_auth / aegis_email
-      const legacyAuth = localStorage.getItem("aegis_auth")
-      const legacyEmail = localStorage.getItem("aegis_email")
-      const legacyPlan = normalizePlan(localStorage.getItem("aegis_plan"))
-      const legacyProvider = localStorage.getItem("aegis_provider") as AegisUser["provider"] | null
-      if (legacyAuth === "1") {
-        const email = legacyEmail || "xdadikuz@gmail.com"
-        const name = deriveName(email)
-        const migrated: AegisUser = {
-          email,
-          name,
-          plan: legacyPlan,
-          createdAt: new Date().toISOString(),
-          provider: legacyProvider === "google" ? "google" : "email",
+
+        // No valid session found
+        if (!cancelled) {
+          setUser(null)
+          setIsLoggedIn(false)
         }
-        localStorage.setItem("aegis_user", JSON.stringify(migrated))
-        setUser(migrated)
-        setIsLoggedIn(true)
+      } catch {
+        if (!cancelled) {
+          setUser(null)
+          setIsLoggedIn(false)
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false)
       }
-    } catch {}
+    }
+
+    syncFromStorage()
+
+    // Cross-tab sync: if auth changes in another tab, update this tab
+    function onStorage(e: StorageEvent) {
+      if (
+        e.key === "aegis_user" ||
+        e.key === "aegis_auth" ||
+        e.key === "aegis_email" ||
+        e.key === "aegis_plan" ||
+        e.key === "aegis_provider" ||
+        e.key === null // clear()
+      ) {
+        syncFromStorage()
+      }
+    }
+    window.addEventListener("storage", onStorage)
+    return () => {
+      cancelled = true
+      window.removeEventListener("storage", onStorage)
+    }
   }, [])
 
   const login = React.useCallback((email?: string, name?: string) => {
@@ -84,9 +183,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const existingPlan = normalizePlan(localStorage.getItem("aegis_plan"))
       const prevUserRaw = localStorage.getItem("aegis_user")
       let prevUser: AegisUser | null = null
-      try { prevUser = prevUserRaw ? JSON.parse(prevUserRaw) : null } catch {}
-      const rawEmail = (email?.trim() || prevUser?.email || localStorage.getItem("aegis_email") || "").trim() || "user@aegis.local"
-      const sanitizedEmail = sanitizeEmail(rawEmail) || "user@aegis.local"
+      try {
+        const parsed = prevUserRaw ? (JSON.parse(prevUserRaw) as unknown) : null
+        if (isValidAegisUser(parsed)) prevUser = parsed as AegisUser
+      } catch {}
+
+      // STRICT: require a valid email from explicit arg, prevUser, or stored email — no hardcoded fallback
+      const rawEmailCandidate = (email?.trim() || prevUser?.email || localStorage.getItem("aegis_email") || "").trim()
+      const sanitizedEmail = rawEmailCandidate ? sanitizeEmail(rawEmailCandidate) : null
+      if (!sanitizedEmail) {
+        // Do not auto-bypass with fake email
+        setUser(null)
+        setIsLoggedIn(false)
+        return
+      }
       const finalEmail = sanitizedEmail
       const finalName = deriveName(finalEmail, name ? sanitizeInput(name, 64) : prevUser?.name)
       const plan = prevUser?.plan || existingPlan || "free"
@@ -100,12 +210,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(next)
       setIsLoggedIn(true)
     } catch {
-      localStorage.setItem("aegis_auth", "1")
-      if (email) {
-        const safe = sanitizeEmail(email) || "user@aegis.local"
-        localStorage.setItem("aegis_email", safe)
-      }
-      setIsLoggedIn(true)
+      // Harden: failure should NOT leave user authenticated
+      setUser(null)
+      setIsLoggedIn(false)
     }
   }, [])
 
@@ -114,11 +221,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const existingPlan = normalizePlan(localStorage.getItem("aegis_plan"))
       const prevUserRaw = localStorage.getItem("aegis_user")
       let prevUser: AegisUser | null = null
-      try { prevUser = prevUserRaw ? JSON.parse(prevUserRaw) : null } catch {}
+      try {
+        const parsed = prevUserRaw ? (JSON.parse(prevUserRaw) as unknown) : null
+        if (isValidAegisUser(parsed)) prevUser = parsed as AegisUser
+      } catch {}
       const legacyEmail = localStorage.getItem("aegis_email")
-      const rawEmail = prevUser?.email || legacyEmail || "user@aegis.local"
-      const email = sanitizeEmail(rawEmail) || "user@aegis.local"
-      const name = prevUser?.name ? sanitizeInput(prevUser.name, 64) : deriveName(email)
+      const rawEmailCandidate = (prevUser?.email || legacyEmail || "").trim()
+      const sanitized = rawEmailCandidate ? sanitizeEmail(rawEmailCandidate) : null
+      if (!sanitized) {
+        // Google flow requires a valid email; without it do not create a fake user
+        setUser(null)
+        setIsLoggedIn(false)
+        return
+      }
+      const email = sanitized
+      const name = prevUser?.name ? sanitizeInput(prevUser.name, 64) || deriveName(email) : deriveName(email)
       const plan = prevUser?.plan || existingPlan || "free"
       const createdAt = prevUser?.createdAt || new Date().toISOString()
       const next: AegisUser = { email, name, plan, createdAt, provider: "google" }
@@ -130,30 +247,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(next)
       setIsLoggedIn(true)
     } catch {
-      localStorage.setItem("aegis_auth", "1")
-      localStorage.setItem("aegis_provider", "google")
-      setIsLoggedIn(true)
+      setUser(null)
+      setIsLoggedIn(false)
+      return
     }
-    window.location.href = "/dashboard"
-  }, [])
+    router.push("/dashboard")
+  }, [router])
 
   const logout = React.useCallback(() => {
-    localStorage.removeItem("aegis_auth")
-    localStorage.removeItem("aegis_email")
-    localStorage.removeItem("aegis_provider")
-    localStorage.removeItem("aegis_user")
+    try {
+      localStorage.removeItem("aegis_auth")
+      localStorage.removeItem("aegis_email")
+      localStorage.removeItem("aegis_provider")
+      localStorage.removeItem("aegis_user")
+      localStorage.removeItem("aegis_plan")
+      // Remove legacy/admin artifacts if present (client-side only)
+      localStorage.removeItem("aegis_admin_auth")
+      sessionStorage.removeItem("aegis_csrf_token")
+      document.cookie = "aegis_csrf_token=; Path=/; Max-Age=0; SameSite=Strict"
+      // Clear admin session cookie if set without HttpOnly (best-effort)
+      document.cookie = "aegis_admin_session=; Path=/; Max-Age=0; SameSite=Strict"
+    } catch {}
     setUser(null)
     setIsLoggedIn(false)
-    window.location.href = "/login"
-  }, [])
+    router.push("/login")
+  }, [router])
 
-  const value = React.useMemo(() => ({ isLoggedIn, user, login, logout, loginWithGoogle }), [isLoggedIn, user, login, logout, loginWithGoogle])
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = React.useMemo(
+    () => ({ isLoggedIn, isLoading, user, login, logout, loginWithGoogle }),
+    [isLoggedIn, isLoading, user, login, logout, loginWithGoogle]
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
