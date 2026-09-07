@@ -1,9 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-/**
- * Re-export guard for Next.js discovery at project root.
- * Real implementation lives in src/middleware.ts — keep in sync.
- */
+import { verifyAdminTokenEdge, getAdminSessionTokenFromCookie } from "./src/lib/auth-edge";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-DNS-Prefetch-Control": "on",
@@ -36,13 +32,18 @@ function applySecurityHeaders(res: NextResponse): void {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAdminApi = pathname.startsWith("/api/admin");
+
   if (isAdminPage || isAdminApi) {
-    const session = request.cookies.get("aegis_admin_session")?.value;
-    if (!session) {
+    const cookieHeader = request.headers.get("cookie") ?? "";
+    const token = getAdminSessionTokenFromCookie(cookieHeader);
+    const secret = process.env.ADMIN_PASS || process.env.AEGIS_ADMIN_PASS || "";
+    const valid = await verifyAdminTokenEdge(token, secret);
+
+    if (!valid) {
       if (isAdminApi) {
         const res = NextResponse.json({ error: "Unauthorized — admin session required" }, { status: 401 });
         applySecurityHeaders(res);
@@ -58,6 +59,7 @@ export function middleware(request: NextRequest) {
       }
     }
   }
+
   const res = NextResponse.next();
   applySecurityHeaders(res);
   return res;

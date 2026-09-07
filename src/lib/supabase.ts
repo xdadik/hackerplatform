@@ -48,13 +48,79 @@ export type DbChallenge = {
   created_at: string
 }
 
+export type DbUser = {
+  id: string
+  email: string
+  name: string
+  plan: string
+  provider: string
+  role: string
+  reputation: number
+  status: string
+  password_hash: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type DbSession = {
+  id: string
+  user_id: string
+  token_hash: string
+  created_at: string
+  expires_at: string
+  last_seen_at: string
+}
+
+export type DbEvent = {
+  id: string
+  title: string
+  type: string
+  date: string
+  status: string
+  participants: number
+  created_at: string
+}
+
+export type DbNews = {
+  id: string
+  title: string
+  excerpt: string
+  author: string
+  tags: string
+  views: number
+  status: string
+  content: string
+  created_at: string
+}
+
+export type DbCve = {
+  id: string
+  cve_id: string
+  title: string
+  severity: string
+  status: string
+  publish_date: string | null
+  created_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
-      videos: { Row: DbVideo; Insert: Omit<DbVideo, "created_at">; Update: Partial<DbVideo> }
-      labs: { Row: DbLab; Insert: Omit<DbLab, "created_at">; Update: Partial<DbLab> }
-      progress: { Row: DbProgress; Insert: Omit<DbProgress, "updated_at">; Update: Partial<DbProgress> }
-      challenges: { Row: DbChallenge; Insert: Omit<DbChallenge, "created_at">; Update: Partial<DbChallenge> }
+      videos: { Row: DbVideo; Insert: Omit<DbVideo, "created_at">; Update: Partial<DbVideo>; Relationships: [] }
+      labs: { Row: DbLab; Insert: Omit<DbLab, "created_at">; Update: Partial<DbLab>; Relationships: [] }
+      progress: { Row: DbProgress; Insert: Omit<DbProgress, "updated_at">; Update: Partial<DbProgress>; Relationships: [] }
+      challenges: { Row: DbChallenge; Insert: Omit<DbChallenge, "created_at">; Update: Partial<DbChallenge>; Relationships: [] }
+      users: { Row: DbUser; Insert: Partial<DbUser>; Update: Partial<DbUser>; Relationships: [] }
+      sessions: { Row: DbSession; Insert: Partial<DbSession>; Update: Partial<DbSession>; Relationships: [] }
+      events: { Row: DbEvent; Insert: Partial<DbEvent>; Update: Partial<DbEvent>; Relationships: [] }
+      news: { Row: DbNews; Insert: Partial<DbNews>; Update: Partial<DbNews>; Relationships: [] }
+      cves: { Row: DbCve; Insert: Partial<DbCve>; Update: Partial<DbCve>; Relationships: [] }
+    }
+    Functions: {
+      is_admin: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean
+      }
     }
   }
 }
@@ -63,9 +129,9 @@ export type Database = {
 // getSupabase – never throws, never crashes the build when env is missing.
 // ---------------------------------------------------------------------------
 
-let _client: SupabaseClient<Database> | null | undefined // undefined = not yet checked
+let _client: SupabaseClient<any> | null | undefined // undefined = not yet checked
 
-export function getSupabase(): SupabaseClient<Database> | null {
+export function getSupabase(): SupabaseClient<any> | null {
   if (_client !== undefined) return _client
 
   const finalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
@@ -92,6 +158,34 @@ export function getSupabase(): SupabaseClient<Database> | null {
     _client = null
   }
   return _client
+}
+
+let _serviceClient: SupabaseClient<any> | null | undefined
+
+/** Server-only client that bypasses RLS (uses SERVICE_ROLE key). Never import on the client. */
+export function getServiceSupabase(): SupabaseClient<any> | null {
+  if (_serviceClient !== undefined) return _serviceClient
+  const finalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    ""
+  if (!finalUrl || !serviceKey) {
+    _serviceClient = null
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[supabase] Service role key missing – server writes will fall back to anon client or fail.")
+    }
+    return _serviceClient
+  }
+  try {
+    _serviceClient = createClient<Database>(finalUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  } catch (err) {
+    console.warn("[supabase] Failed to create service client:", err)
+    _serviceClient = null
+  }
+  return _serviceClient
 }
 
 /** Reset cached client – useful in tests. */
