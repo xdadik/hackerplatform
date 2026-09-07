@@ -1,5 +1,6 @@
 import { getServiceSupabase } from "@/lib/supabase"
 import { getSessionToken, getUserBySession, type SessionUser } from "@/lib/auth-server"
+import { rateLimitCheck, rateLimitRecord } from "@/lib/rate-limit-server"
 
 export const dynamic = "force-dynamic"
 
@@ -8,6 +9,11 @@ export const dynamic = "force-dynamic"
 // The service-role client is used because RLS policies rely on Supabase
 // auth.uid(), which is null for our custom session tokens — user identity is
 // resolved server-side before any query.
+
+const PROGRESS_MAX = 30 // writes per minute per user
+const PROGRESS_WINDOW = 60_000
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type ProgressPayload = {
   labId?: string | null
@@ -81,6 +87,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "Database is not configured" }, { status: 503, headers })
   }
 
+  // This route is an unthrottled authenticated write endpoint otherwise —
+  // 30 writes/min per user is generous for real UIs and hostile to scripts.
+  const bucket = `progress:${user.id}`
+  const rl = await rateLimitCheck(bucket, PROGRESS_MAX, PROGRESS_WINDOW)
+  if (rl.limited) {
+    return Response.json(
+      { error: "Too many progress updates. Try again shortly." },
+      { status: 429, headers: { ...headers, "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
+  }
+  await rateLimitRecord(bucket, PROGRESS_MAX, PROGRESS_WINDOW)
+
   let body: unknown
   try {
     body = await request.json()
@@ -96,6 +114,14 @@ export async function POST(request: Request) {
     )
   }
 
+  // Reject non-UUID ids with a clean 400 instead of an opaque DB 500.
+  if (clean.labId && !UUID_RE.test(clean.labId)) {
+    return Response.json({ error: "labId must be a UUID" }, { status: 400, headers })
+  }
+  if (clean.challengeId && !UUID_RE.test(clean.challengeId)) {
+    return Response.json({ error: "challengeId must be a UUID" }, { status: 400, headers })
+  }
+
   const payload = {
     user_id: user.id,
     lab_id: clean.labId,
@@ -105,16 +131,21 @@ export async function POST(request: Request) {
     updated_at: clean.updatedAt,
   }
 
-  // Upsert by (user, item) via select-then-write — the progress table has no
-  // unique constraint covering NULL lab/challenge ids, so ON CONFLICT cannot
-  // be inferred. Single-writer per user makes this safe in practice.
+  // Upsert by (user, item) via select-then-write. The progress table has no
+  // ON CONFLICT target covering NULL lab/challenge ids, so we select first,
+  // and if the 0003 unique index turns a concurrent insert into a duplicate
+  // error we retry once as an update.
+  const buildSelect = () => {
+    let q = supabase.from("progress").select("id").eq("user_id", user.id as string)
+    if (clean.labId) q = q.eq("lab_id", clean.labId)
+    else q = q.is("lab_id", null)
+    if (clean.challengeId) q = q.eq("challenge_id", clean.challengeId)
+    else q = q.is("challenge_id", null)
+    return q
+  }
+
   try {
-    let query = supabase.from("progress").select("id").eq("user_id", user.id)
-    if (clean.labId) query = query.eq("lab_id", clean.labId)
-    else query = query.is("lab_id", null)
-    if (clean.challengeId) query = query.eq("challenge_id", clean.challengeId)
-    else query = query.is("challenge_id", null)
-    const { data: existing, error: selectErr } = await query.limit(1)
+    const { data: existing, error: selectErr } = await buildSelect().limit(1)
 
     if (selectErr) throw new Error(selectErr.message)
 
@@ -134,6 +165,22 @@ export async function POST(request: Request) {
       .insert(payload)
       .select("id,lab_id,challenge_id,status,progress,updated_at")
       .single()
+
+    if (insertErr && /duplicate|unique/i.test(insertErr.message)) {
+      // Raced a concurrent write — the row now exists, so update it.
+      const { data: raced } = await buildSelect().limit(1)
+      const racedId = raced && raced.length > 0 ? (raced[0].id as string) : null
+      if (racedId) {
+        const { data: updated, error: updateErr } = await supabase
+          .from("progress")
+          .update({ status: clean.status, progress: clean.progress, updated_at: clean.updatedAt })
+          .eq("id", racedId)
+          .select("id,lab_id,challenge_id,status,progress,updated_at")
+          .single()
+        if (updateErr) throw new Error(updateErr.message)
+        return Response.json({ ok: true, progress: updated, source: "supabase" }, { headers })
+      }
+    }
     if (insertErr) throw new Error(insertErr.message)
     return Response.json({ ok: true, progress: inserted, source: "supabase" }, { headers })
   } catch (err) {

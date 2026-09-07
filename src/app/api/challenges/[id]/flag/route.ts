@@ -4,20 +4,11 @@ import { rateLimitCheck, rateLimitRecord, getClientIp } from "@/lib/rate-limit-s
 
 export const dynamic = "force-dynamic"
 
-// Flag verification against the labs table (flag_hash column, scrypt).
-// Flags are never stored in plaintext — the admin panel hashes the flag with
-// scrypt before persisting. DEMO_FLAGS is kept as a fallback for the six
-// bundled demo labs (lab-1..lab-6) so the platform works before the DB is
-// seeded. When a lab exists in the DB, its flag_hash is authoritative.
-
-const DEMO_FLAGS: Record<string, string> = {
-  "lab-1": "flag{sqli_fundamentals_2026}",
-  "lab-2": "flag{privesc_linux_2026}",
-  "lab-3": "flag{ad_enumeration_master}",
-  "lab-4": "flag{iam_misconfig_pwned}",
-  "lab-5": "flag{volatility_memory_win}",
-  "lab-6": "flag{wireshark_traffic_hunter}",
-}
+// Challenge flag verification — mirrors /api/labs/[id]/flag but reads the
+// challenges table. Unlike the old client-side check (which accepted ANY
+// "flag{...}" text and faked the solve), the decision is made here against
+// the scrypt flag_hash stored by the admin panel. There is intentionally NO
+// demo-flag fallback: a challenge that is not in the DB has no valid flag.
 
 const FLAG_REGEX = /^(flag|aegis)\{[^}]+\}$/
 const FLAG_MAX = 5
@@ -27,16 +18,11 @@ function isValidFlagFormat(flag: string): boolean {
   return FLAG_REGEX.test(flag.trim())
 }
 
-function normalizeFlag(flag: string): string {
-  // allow aegis{...} / flag{...} prefix swap, case-insensitive compare
-  return flag.trim().replace(/^aegis\{/i, "flag{").toLowerCase()
-}
-
 /** Upsert completed progress, retrying once if the 0003 unique index races us. */
 async function saveProgress(
   supabase: NonNullable<ReturnType<typeof getServiceSupabase>>,
   userId: string,
-  labId: string
+  challengeId: string
 ): Promise<boolean> {
   const now = new Date().toISOString()
   try {
@@ -44,7 +30,7 @@ async function saveProgress(
       .from("progress")
       .select("id")
       .eq("user_id", userId)
-      .eq("lab_id", labId)
+      .eq("challenge_id", challengeId)
       .limit(1)
     if (existing.data && existing.data.length > 0) {
       await supabase
@@ -55,19 +41,17 @@ async function saveProgress(
     }
     const inserted = await supabase.from("progress").insert({
       user_id: userId,
-      lab_id: labId,
+      challenge_id: challengeId,
       status: "completed",
       progress: 100,
       updated_at: now,
     })
-    // Concurrent submissions can race past the select; the unique index
-    // (migration 0003) turns the duplicate into an update instead.
     if (inserted.error && /duplicate|unique/i.test(inserted.error.message)) {
       const raced = await supabase
         .from("progress")
         .select("id")
         .eq("user_id", userId)
-        .eq("lab_id", labId)
+        .eq("challenge_id", challengeId)
         .limit(1)
       if (raced.data && raced.data.length > 0) {
         await supabase
@@ -89,7 +73,7 @@ export async function POST(
 ) {
   const { id } = await params
   const ip = getClientIp(request)
-  const rateKey = `flag:${id}:${ip}`
+  const rateKey = `cflag:${id}:${ip}`
 
   const rl = await rateLimitCheck(rateKey, FLAG_MAX, FLAG_WINDOW)
   if (rl.limited) {
@@ -125,54 +109,53 @@ export async function POST(
     )
   }
 
-  // 1) DB lab (authoritative) — verify against scrypt flag_hash
-  let correct = false
-  let labRow: Record<string, unknown> | null = null
   const supabase = getServiceSupabase()
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from("labs")
-        .select("id,title,flag_hash")
-        .eq("id", id)
-        .limit(1)
-      if (!error && data && data.length > 0) labRow = data[0] as Record<string, unknown>
-    } catch (err) {
-      console.warn("[api/labs/flag] DB lookup failed, using demo fallback:", err)
-    }
+  if (!supabase) {
+    await rateLimitRecord(rateKey, FLAG_MAX, FLAG_WINDOW)
+    return Response.json(
+      { correct: false, message: "Challenge verification is unavailable (database not configured)." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    )
   }
 
-  if (labRow && typeof labRow.flag_hash === "string" && labRow.flag_hash) {
-    correct = await verifyPassword(trimmed, labRow.flag_hash)
-  } else if (labRow) {
-    // Lab exists in DB but no flag configured
-    correct = false
-  } else {
-    // 2) Demo labs fallback (DB unconfigured or lab not migrated yet)
-    const expected = DEMO_FLAGS[id]
-    if (expected) {
-      correct = normalizeFlag(trimmed) === normalizeFlag(expected)
-    } else {
-      correct = false
-    }
+  let challengeRow: Record<string, unknown> | null = null
+  try {
+    const { data, error } = await supabase
+      .from("challenges")
+      .select("id,name,flag_hash")
+      .eq("id", id)
+      .limit(1)
+    if (!error && data && data.length > 0) challengeRow = data[0] as Record<string, unknown>
+  } catch (err) {
+    console.warn("[api/challenges/flag] DB lookup failed:", err)
   }
+
+  const storedHash = challengeRow && typeof challengeRow.flag_hash === "string" && challengeRow.flag_hash
+    ? challengeRow.flag_hash
+    : null
+  const correct = storedHash ? await verifyPassword(trimmed, storedHash) : false
 
   if (!correct) {
     await rateLimitRecord(rateKey, FLAG_MAX, FLAG_WINDOW)
     return Response.json(
-      { correct: false, message: "Incorrect flag. Try again.", ...(labRow && !labRow.flag_hash ? { hint: "Flag not configured for this lab yet." } : {}) },
+      {
+        correct: false,
+        message: challengeRow
+          ? storedHash
+            ? "Incorrect flag. Try again."
+            : "Flag not configured for this challenge yet."
+          : "Challenge not found.",
+      },
       { headers: { "Cache-Control": "no-store" } }
     )
   }
 
-  // Correct: record progress for logged-in users (best-effort, non-blocking failure)
+  // Correct: record progress for logged-in users (best-effort)
   let progressSaved = false
-  if (labRow && supabase) {
-    const token = getSessionToken(request)
-    const user = token ? await getUserBySession(token) : null
-    if (user) {
-      progressSaved = await saveProgress(supabase, user.id, String(labRow.id))
-    }
+  const token = getSessionToken(request)
+  const user = token ? await getUserBySession(token) : null
+  if (user && challengeRow) {
+    progressSaved = await saveProgress(supabase, user.id, String(challengeRow.id))
   }
 
   return Response.json(

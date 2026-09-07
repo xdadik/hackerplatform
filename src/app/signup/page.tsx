@@ -11,7 +11,7 @@ import { FadeIn, ScaleIn } from "@/components/ui/stagger"
 import { useAuth } from "@/components/auth-provider"
 import { Eye, EyeOff, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react"
 import { sanitizeInput, sanitizeEmail } from "@/lib/sanitize"
-import { loginLimiter } from "@/lib/rate-limit"
+import { signupLimiter } from "@/lib/rate-limit"
 
 function GoogleIcon() {
   return (
@@ -42,7 +42,7 @@ export default function SignupPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const rl = loginLimiter.check()
+    const rl = signupLimiter.check()
     if (rl.limited) {
       setError(`Too many attempts. Try again in ${Math.ceil(rl.resetMs/60000)} min.`)
       return
@@ -57,7 +57,7 @@ export default function SignupPage() {
     const email = sanitizeEmail(emailRaw) || emailRaw.trim().toLowerCase()
 
     if (!name || !email.includes("@") || password.length < 8) {
-      loginLimiter.record(false)
+      signupLimiter.record(false)
       setError("Please enter a name, valid email, and password with at least 8 characters.")
       shakeCard("signup-card")
       setLoading(false)
@@ -68,12 +68,12 @@ export default function SignupPage() {
     const result = await signup(name, email, password)
     setLoading(false)
     if (!result.ok) {
-      loginLimiter.record(false)
+      signupLimiter.record(false)
       setError(result.error ?? "Signup failed. Please try again.")
       shakeCard("signup-card")
       return
     }
-    loginLimiter.reset()
+    signupLimiter.reset()
     window.location.href = "/dashboard"
   }
 

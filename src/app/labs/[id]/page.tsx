@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ArrowLeft, Clock, Target, Terminal, StickyNote, Flag, RotateCcw, AlertTriangle, CheckCircle2, Play, Shield, FileText, ChevronRight, Lock, Send } from "lucide-react"
 import { sanitizeInput } from "@/lib/sanitize"
-import { flagLimiter } from "@/lib/rate-limit"
 
 const labData: Record<string, any> = {
   "lab-1": { title: "SQL Injection Fundamentals", category: "Web Security", diff: "Beginner", time: "45 min", progress: 72 },
@@ -30,6 +29,8 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
   const [notes, setNotes] = React.useState("- tried ' OR 1=1--, got 500\n- ORDER BY 3 works, 4 fails -> 3 columns\n- union select null,null,null -> need to check")
   const [flag, setFlag] = React.useState("")
   const [flagMsg, setFlagMsg] = React.useState<string | null>(null)
+  const [flagOk, setFlagOk] = React.useState<boolean | null>(null)
+  const [submitting, setSubmitting] = React.useState(false)
   const [hintRevealed, setHintRevealed] = React.useState(false)
   const [reportOpen, setReportOpen] = React.useState(false)
   const [reportText, setReportText] = React.useState("")
@@ -87,26 +88,48 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
     alert("opening lab — container at LAB_HOST (prod proxies to k8s).")
     try{ window.open(`/labs/${id}`, "_blank")}catch{}
   }
-  const handleSubmitFlag = () => {
-    const rl = flagLimiter.check(id)
-    if (rl.limited) return setFlagMsg(`Rate limited: try again in ${Math.ceil(rl.resetMs/1000)}s (5/min) — server enforces same`)
+  const handleSubmitFlag = async () => {
     const cleanFlag = sanitizeInput(flag, 200).trim()
-    if(!cleanFlag) return setFlagMsg("Enter flag (format: flag{...} or aegis{...})")
-    flagLimiter.record(id)
-    const ok = /^(flag|aegis)\{[^}]+\}$/i.test(cleanFlag)
-    if(ok){
-      setProgress(100)
-      setFlagMsg("✅ Correct! Lab completed — 120 XP awarded (mock). Progress saved to localStorage.")
-      try{
-        const raw=localStorage.getItem("aegis_progress")
-        let p={pct:0, completed:0, total:32}
-        if(raw) try{ p=JSON.parse(raw)}catch{}
-        p.completed=Math.min(p.total, (p.completed||0)+1)
-        p.pct=Math.round((p.completed/p.total)*100)
-        localStorage.setItem("aegis_progress", JSON.stringify(p))
-      }catch{}
-    } else {
-      setFlagMsg("❌ Incorrect flag. Try UNION SELECT payload — check notes. 5 attempts/min rate limit (mock).")
+    if (!cleanFlag) { setFlagOk(false); setFlagMsg("Enter flag (format: flag{...} or aegis{...})") ; return }
+    if (submitting) return
+    setSubmitting(true)
+    setFlagMsg(null)
+    // Real server-side verification — POST /api/labs/[id]/flag checks the
+    // flag against the scrypt flag_hash in the DB (server is the ONLY source
+    // of truth; the client no longer decides what is "correct").
+    try {
+      const res = await fetch(`/api/labs/${id}/flag`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flag: cleanFlag }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { correct?: boolean; message?: string; error?: string; hint?: string; progressSaved?: boolean; retryAfterMs?: number }
+        | null
+      if (res.status === 429) {
+        setFlagOk(false)
+        setFlagMsg(`Rate limited — try again in ${Math.ceil((data?.retryAfterMs ?? 60000) / 1000)}s.`)
+      } else if (data?.correct) {
+        setFlagOk(true)
+        setProgress(100)
+        setFlagMsg(`✅ Correct! Lab completed.${data.progressSaved ? " Progress saved to your account." : ""}`)
+        try {
+          const raw = localStorage.getItem("aegis_progress")
+          let p = { pct: 0, completed: 0, total: 32 }
+          if (raw) try { p = JSON.parse(raw) } catch {}
+          p.completed = Math.min(p.total, (p.completed || 0) + 1)
+          p.pct = Math.round((p.completed / p.total) * 100)
+          localStorage.setItem("aegis_progress", JSON.stringify(p))
+        } catch {}
+      } else {
+        setFlagOk(false)
+        setFlagMsg(`❌ ${data?.message || data?.error || data?.hint || "Incorrect flag. Try again."}`)
+      }
+    } catch {
+      setFlagOk(false)
+      setFlagMsg("Network error — could not verify the flag.")
+    } finally {
+      setSubmitting(false)
     }
   }
   const handleFlagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -236,9 +259,9 @@ export default function LabDetail({ params }: { params: Promise<{ id: string }> 
                   <div className="p-3 bg-[var(--surface-2)] border-t border-[var(--border)] flex gap-2">
                     <label htmlFor="flag-input" className="sr-only">Flag input</label>
                     <input id="flag-input" value={flag} onChange={e=>setFlag(e.target.value)} onKeyDown={handleFlagKeyDown} placeholder="Enter flag or answer..." aria-label="Flag input" className="flex-1 h-8 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
-                    <Button size="sm" className="h-8" onClick={handleSubmitFlag} aria-label="Submit flag">Submit</Button>
+                    <Button size="sm" className="h-8" onClick={handleSubmitFlag} disabled={submitting} aria-label="Submit flag">{submitting ? "Verifying..." : "Submit"}</Button>
                   </div>
-                  {flagMsg && <div role="status" aria-live="polite" className="px-3 pb-3 text-[12px] leading-5" style={{color: flagMsg.includes("✅") ? "#059669" : "#DC2626"}}>{flagMsg}</div>}
+                  {flagMsg && <div role="status" aria-live="polite" className="px-3 pb-3 text-[12px] leading-5" style={{color: flagOk ? "#059669" : flagOk === false ? "#DC2626" : "var(--text-2)"}}>{flagMsg}</div>}
                 </Card>
 
                 <Card className="mt-4">

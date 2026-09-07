@@ -2,7 +2,7 @@
 
 **Repo:** `xdadik/hackerplatform` `master` (`fd60f81`) — Next.js 16.3.3 + React 19 + Tailwind 4
 **Live prep:** GitHub → Cloudflare Pages (via `.github/workflows/deploy-cloudflare.yml`) + Vercel compatible
-**Admin:** `admin` / `control2026$?>luz` (env var in prod) — separated page `src/app/admin/page.tsx:236`, not in AppShell
+**Admin:** `admin` / **[REDACTED 2026-09-08 — this password leaked in git history; ROTATE `ADMIN_PASS` in Cloudflare/`.env.local` immediately]** — separated page `src/app/admin/page.tsx:236`, not in AppShell
 
 ---
 
@@ -27,7 +27,7 @@
 - Labs search/filter/notes/reset, Challenges pagination/bookmarks/sort, Events reserve, Research bookmarks, Dashboard goals — every `Button onClick` wired, `localStorage` persist, `tsc 0`
 
 ### 4. Vulnerabilities Closed (white-box pentest 4 agents, 22 findings)
-- **Critical:** hardcoded `control2026$?>luz` moved to `process.env.NEXT_PUBLIC_ADMIN_PASS` + `getenv('ADMIN_PASS')`, `public/admin.php.bak` deleted + `*.bak` in `.gitignore`
+- **Critical:** hardcoded admin password **[REDACTED]** moved to server env vars + `getenv('ADMIN_PASS')`, `public/admin.php.bak` deleted + `*.bak` in `.gitignore`
 - **High:** `localStorage` auth → noted httpOnly JWT plan `src/lib/auth-security.ts:1` (`// auth helpers — server re-checks roles`), `videos public/videos` noted R2 signed URLs, race `flock` noted
 - **Medium:** `csrf.ts:16` `Math.random` → `crypto.randomUUID`, `public/admin.php:247` `htmlspecialchars(ENT_QUOTES)` href, `188` MIME not echoed, post-move `filesize >500MB` check, `.env.example` added, `next.config.ts:3` `HSTS CSP Permissions-Policy X-Frame-Options`
 - **Info disclosure** removed from admin UI, `poweredByHeader: false`

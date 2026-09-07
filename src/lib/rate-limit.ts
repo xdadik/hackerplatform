@@ -61,6 +61,17 @@ export const loginLimiter = {
   reset: () => resetRateLimit("login"),
 }
 
+// Signup gets its OWN bucket — sharing loginLimiter meant a failed signup
+// could lock a user out of logging in (and vice versa) for 15 minutes.
+export const signupLimiter = {
+  key: "signup",
+  max: 5,
+  windowMs: 15 * 60 * 1000,
+  check: () => checkRateLimit("signup", 5, 15 * 60 * 1000),
+  record: (success: boolean) => recordAttempt("signup", success),
+  reset: () => resetRateLimit("signup"),
+}
+
 export const adminLoginLimiter = {
   key: "admin_login",
   max: 5,

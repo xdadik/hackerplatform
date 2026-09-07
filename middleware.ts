@@ -44,7 +44,14 @@ export async function middleware(request: NextRequest) {
   if (isAdminPage || isAdminApi) {
     const cookieHeader = request.headers.get("cookie") ?? "";
     const token = getAdminSessionTokenFromCookie(cookieHeader);
-    const secret = process.env.ADMIN_PASS || process.env.AEGIS_ADMIN_PASS || "";
+    // Must mirror the chain in /api/admin/login and src/lib/admin-api.ts:
+    // NEXTAUTH_SECRET is the signing key; ADMIN_PASS is the dev fallback.
+    const secret =
+      process.env.NEXTAUTH_SECRET ||
+      process.env.ADMIN_PASS ||
+      process.env.AEGIS_ADMIN_PASS ||
+      process.env.ADMIN_PASSWORD ||
+      "";
     const valid = await verifyAdminTokenEdge(token, secret);
 
     if (!valid) {

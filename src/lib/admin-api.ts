@@ -58,7 +58,12 @@ export const ADMIN_RESOURCES: Record<string, ResourceConfig> = {
     // never expose or accept password_hash directly; password -> scrypt hash
     beforeWrite: async (payload, mode) => {
       const next = { ...payload }
-      if (typeof next.password === "string" && next.password.length >= 8) {
+      if (typeof next.password === "string" && next.password.length > 0) {
+        // A short password would previously be silently ignored, creating a
+        // user that can NEVER log in (password_hash stays null) — reject it.
+        if (next.password.length < 8 || next.password.length > 128) {
+          throw new Error("ADMIN_INPUT:Password must be 8-128 characters")
+        }
         next.password_hash = await hashPassword(next.password)
       } else if (mode === "create") {
         // admin-created users without a password cannot log in until reset
@@ -230,7 +235,9 @@ export const ADMIN_RESOURCES: Record<string, ResourceConfig> = {
 
 export function isAdminRequestAuthorized(request: Request): boolean {
   const token = getAdminSessionToken(request)
-  const secret = env.ADMIN_PASS
+  // NEXTAUTH_SECRET signs the admin cookie (see auth-server.ts header);
+  // ADMIN_PASS is the local-dev fallback and must match /api/admin/login.
+  const secret = env.NEXTAUTH_SECRET || env.ADMIN_PASS
   if (!secret || secret === "change-me") return false
   return verifyAdminToken(token, secret)
 }
@@ -329,7 +336,7 @@ export async function handleAdminList(resource: string, request: Request): Promi
   const { data, error } = await query
   if (error) {
     console.error(`[admin-api] list ${resource} failed:`, error.message)
-    return jsonError(`Failed to list ${resource}: ${error.message}`, 500)
+    return jsonError(`Failed to list ${resource}`, 500)
   }
   return Response.json({ data: data ?? [], resource }, { headers: { "Cache-Control": "no-store" } })
 }
@@ -349,7 +356,16 @@ export async function handleAdminCreate(resource: string, request: Request): Pro
   if (errors.length > 0) return jsonError(errors.join("; "), 400)
 
   let finalPayload = payload
-  if (config.beforeWrite) finalPayload = await config.beforeWrite(payload, "create")
+  if (config.beforeWrite) {
+    try {
+      finalPayload = await config.beforeWrite(payload, "create")
+    } catch (err) {
+      const msg = err instanceof Error && err.message.startsWith("ADMIN_INPUT:")
+        ? err.message.slice("ADMIN_INPUT:".length)
+        : "Invalid input"
+      return jsonError(msg, 400)
+    }
+  }
 
   const supabase = getServiceSupabase()
   if (!supabase) return jsonError("Database is not configured (SUPABASE_SERVICE_ROLE_KEY missing)", 503)
@@ -362,7 +378,8 @@ export async function handleAdminCreate(resource: string, request: Request): Pro
   if (error) {
     console.error(`[admin-api] create ${resource} failed:`, error.message)
     const duplicate = /duplicate|unique/i.test(error.message)
-    return jsonError(duplicate ? "An entry with this unique field already exists" : `Failed to create ${resource}: ${error.message}`, duplicate ? 409 : 500)
+    // Never echo raw DB error text to the client — details stay in server logs
+    return jsonError(duplicate ? "An entry with this unique field already exists" : `Failed to create ${resource}`, duplicate ? 409 : 500)
   }
 
   await writeAudit("create", resource, String(((data as unknown as Record<string, unknown>) ?? {})?.id ?? ""), { fields: Object.keys(payload) })
@@ -388,7 +405,16 @@ export async function handleAdminUpdate(resource: string, request: Request): Pro
   if (Object.keys(payload).length === 0) return jsonError("No valid fields to update", 400)
 
   let finalPayload = payload
-  if (config.beforeWrite) finalPayload = await config.beforeWrite(payload, "update")
+  if (config.beforeWrite) {
+    try {
+      finalPayload = await config.beforeWrite(payload, "update")
+    } catch (err) {
+      const msg = err instanceof Error && err.message.startsWith("ADMIN_INPUT:")
+        ? err.message.slice("ADMIN_INPUT:".length)
+        : "Invalid input"
+      return jsonError(msg, 400)
+    }
+  }
 
   const supabase = getServiceSupabase()
   if (!supabase) return jsonError("Database is not configured (SUPABASE_SERVICE_ROLE_KEY missing)", 503)
@@ -401,7 +427,7 @@ export async function handleAdminUpdate(resource: string, request: Request): Pro
     .single()
   if (error) {
     console.error(`[admin-api] update ${resource} ${id} failed:`, error.message)
-    return jsonError(`Failed to update ${resource}: ${error.message}`, 500)
+    return jsonError(`Failed to update ${resource}`, 500)
   }
 
   await writeAudit("update", resource, id, { fields: Object.keys(payload) })
@@ -422,7 +448,7 @@ export async function handleAdminDelete(resource: string, request: Request): Pro
   const { error } = await supabase.from(config.table).delete().eq("id", id)
   if (error) {
     console.error(`[admin-api] delete ${resource} ${id} failed:`, error.message)
-    return jsonError(`Failed to delete ${resource}: ${error.message}`, 500)
+    return jsonError(`Failed to delete ${resource}`, 500)
   }
 
   await writeAudit("delete", resource, id, null)

@@ -59,7 +59,7 @@ PHP `admin.php` fix:
 
 **Finding:**
 - `src/components/auth-provider.tsx:42-61` trusts `localStorage.getItem("aegis_auth")==="1"` and `aegis_user` JSON. Any XSS or DevTools can set `localStorage.setItem("aegis_auth","1")` and become authenticated. Plan (`aegis_plan`) is client-trusted.
-- `src/app/admin/page.tsx:39-45` trusted `localStorage.getItem("aegis_admin_auth")==="1"` with hardcoded `admin / Aegis2026!` in client bundle.
+- `src/app/admin/page.tsx:39-45` trusted `localStorage.getItem("aegis_admin_auth")==="1"` with hardcoded `admin / **[REDACTED — rotate ADMIN_PASS]**` in client bundle.
 
 **Fix:**
 - Added `src/lib/auth-security.ts` documenting httpOnly migration:
@@ -122,12 +122,12 @@ PHP `admin.php` fix:
 ### 6) Exposed Secrets (High)
 
 **Finding:**
-- Hardcoded `ADMIN_USER='admin'`, `ADMIN_PASS='Aegis2026!'` in client bundle (`src/app/admin/page.tsx:43` displayed as `admin / Aegis2026!`) and in `public/admin.php:6` + `admin.php` root.
+- Hardcoded `ADMIN_USER='admin'`, `ADMIN_PASS='**[REDACTED — rotate ADMIN_PASS]**'` in client bundle (`src/app/admin/page.tsx:43` displayed as `admin / **[REDACTED — rotate ADMIN_PASS]**`) and in `public/admin.php:6` + `admin.php` root.
 - `.gitignore` correctly ignores `.env*` but no `.env.example` or note.
 
 **Fix:**
 - Added warning comments in both files: “load from env vars — never client bundle. Use `process.env.ADMIN_PASS` on server route.”
-- `admin/page.tsx` now shows “Demo: admin / Aegis2026! — move to env var + httpOnly cookie in prod” instead of plain hint.
+- `admin/page.tsx` now shows “Demo: admin / **[REDACTED — rotate ADMIN_PASS]** — move to env var + httpOnly cookie in prod” instead of plain hint.
 - `.gitignore:34` already has `.env*` — documented in this file.
 - PHP `admin.php` fixed to suggest `getenv('ADMIN_PASS')` and keeps constant only for demo.
 

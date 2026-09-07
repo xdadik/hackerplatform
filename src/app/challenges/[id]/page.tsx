@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Trophy, Clock, Users, Flag, Bookmark, Share2, AlertTriangle, CheckCircle2, Terminal, Code2, Download } from "lucide-react"
 import { sanitizeInput } from "@/lib/sanitize"
-import { flagLimiter } from "@/lib/rate-limit"
 import { challenges } from "@/lib/data"
 
 export default function ChallengeDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +23,8 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
   const [bookmarked, setBookmarked] = React.useState(false)
   const [flag, setFlag] = React.useState("")
   const [msg, setMsg] = React.useState<string|null>(null)
+  const [msgOk, setMsgOk] = React.useState<boolean|null>(null)
+  const [submitting, setSubmitting] = React.useState(false)
   const [solved, setSolved] = React.useState(false)
   React.useEffect(()=>{
     try{
@@ -60,15 +61,42 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
     // revoke after delay so download completes
     setTimeout(()=> URL.revokeObjectURL(url), 1000)
   }
-  const submitFlag=()=>{
-    const rl = flagLimiter.check(id)
-    if (rl.limited) return setMsg(`Rate limited: try again in ${Math.ceil(rl.resetMs/1000)}s (5/min)`)
+  const submitFlag=async()=>{
     const clean = sanitizeInput(flag, 200).trim()
-    if(!clean) return setMsg("Enter flag (aegis{...})")
-    flagLimiter.record(id)
-    const ok=/^aegis\{.+\}$/i.test(clean) || /^flag\{.+\}$/i.test(clean)
-    if(ok){ setSolved(true); setMsg("✅ Correct! Challenge solved — points awarded (mock). Saved to localStorage."); try{ localStorage.setItem(`aegis_solved_${id}`,"1")}catch{} }
-    else setMsg("❌ Incorrect flag. Try again. 5 attempts/min (mock).")
+    if(!clean) { setMsgOk(false); setMsg("Enter flag (format: flag{...} or aegis{...})") ; return }
+    if (submitting) return
+    setSubmitting(true)
+    setMsg(null)
+    // Real server-side verification — POST /api/challenges/[id]/flag checks
+    // the flag against the scrypt flag_hash in the DB. The client no longer
+    // decides what is "correct" (the old regex accepted ANY flag{...} text).
+    try {
+      const res = await fetch(`/api/challenges/${id}/flag`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flag: clean }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { correct?: boolean; message?: string; error?: string; progressSaved?: boolean; retryAfterMs?: number }
+        | null
+      if (res.status === 429) {
+        setMsgOk(false)
+        setMsg(`Rate limited — try again in ${Math.ceil((data?.retryAfterMs ?? 60000) / 1000)}s.`)
+      } else if (data?.correct) {
+        setMsgOk(true)
+        setSolved(true)
+        setMsg(`✅ Correct! Challenge solved.${data.progressSaved ? " Progress saved to your account." : ""}`)
+        try{ localStorage.setItem(`aegis_solved_${id}`,"1") }catch{}
+      } else {
+        setMsgOk(false)
+        setMsg(`❌ ${data?.message || data?.error || "Incorrect flag. Try again."}`)
+      }
+    } catch {
+      setMsgOk(false)
+      setMsg("Network error — could not verify the flag.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -125,9 +153,9 @@ export default function ChallengeDetail({ params }: { params: Promise<{ id: stri
                 </div>
                 <div className="mt-4 flex items-center gap-2">
                   <input id="flag-input" value={flag} onChange={e=>setFlag(e.target.value)} placeholder="aegis{...}" aria-label="Flag input" className="flex-1 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
-                  <Button size="sm" className="min-h-11 h-11 sm:h-8 sm:min-h-0" onClick={submitFlag} aria-label="Submit flag">Submit</Button>
+                  <Button size="sm" className="min-h-11 h-11 sm:h-8 sm:min-h-0" onClick={submitFlag} disabled={submitting} aria-label="Submit flag">{submitting ? "Verifying..." : "Submit"}</Button>
                 </div>
-                {msg && <div role="status" aria-live="polite" className={`mt-2 text-[12px] ${msg.includes("✅")||msg.includes("copied")?"text-emerald-600":"text-red-600"}`}>{msg}</div>}
+                {msg && <div role="status" aria-live="polite" className={`mt-2 text-[12px] ${msgOk===true||msg.includes("copied")?"text-emerald-600":msgOk===false?"text-red-600":"text-[var(--text-2)]"}`}>{msg}</div>}
                 <div className="mt-2 text-[11px] text-[var(--text-3)]">Server validates flag server-side. 5 attempts/min. Instances are per-user and isolated.</div>
                 {solved && <div className="mt-3 p-3 rounded-[8px] bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-[12px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Solved — writeup unlocked!</div>}
               </CardContent>

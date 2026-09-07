@@ -47,7 +47,8 @@ export default function LoginPage() {
     const email = sanitizeEmail(emailRaw) || emailRaw.trim().toLowerCase()
 
     if (!email.includes("@") || password.length < 8) {
-      loginLimiter.record(false)
+      // Format typos are NOT counted — only real credential failures are
+      // (server-side does the same; counting these caused false lockouts).
       const rem = loginLimiter.check().remaining
       setError(`Invalid email or password. Must be at least 8 characters. Attempts left: ${rem}`)
       shakeCard("login-card")
