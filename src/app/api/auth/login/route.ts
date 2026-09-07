@@ -1,4 +1,5 @@
 import { authenticateUser, createSession, buildSetCookie } from "@/lib/auth-server"
+import { getServiceSupabase } from "@/lib/supabase"
 import { sanitizeEmail } from "@/lib/sanitize"
 import { getClientIp, checkRateLimitServer, recordAttemptServer } from "@/lib/rate-limit-server"
 
@@ -41,8 +42,15 @@ export async function POST(request: Request) {
 
   try {
     const token = await createSession(user.id)
+    // Best-effort: stamp last_login_at (column added by 0002 migration)
+    try {
+      const svc = getServiceSupabase()
+      if (svc) await svc.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", user.id)
+    } catch {
+      /* non-fatal */
+    }
     return Response.json(
-      { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role }, ok: true },
+      { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role, provider: user.provider, reputation: user.reputation }, ok: true },
       { headers: { "Set-Cookie": buildSetCookie(token) } }
     )
   } catch (err) {

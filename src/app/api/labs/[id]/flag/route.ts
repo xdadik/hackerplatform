@@ -1,13 +1,15 @@
+import { getServiceSupabase } from "@/lib/supabase"
+import { getSessionToken, getUserBySession, verifyPassword } from "@/lib/auth-server"
+import { checkRateLimitServer, recordAttemptServer, getClientIp } from "@/lib/rate-limit-server"
+
 export const dynamic = "force-dynamic"
 
-// In-memory rate limit + flag store (per server instance).
-// For demo / before Supabase persistence.
+// Flag verification against the labs table (flag_hash column, scrypt).
+// Flags are never stored in plaintext — the admin panel hashes the flag with
+// scrypt before persisting. DEMO_FLAGS is kept as a fallback for the six
+// bundled demo labs (lab-1..lab-6) so the platform works before the DB is
+// seeded. When a lab exists in the DB, its flag_hash is authoritative.
 
-type RateEntry = { count: number; resetAt: number }
-const rateMap = new Map<string, RateEntry>()
-
-// Demo flag answers – in production these would live in DB / env secrets.
-// For unknown lab ids, any flag matching the regex is considered correct if it contains "aegis" prefix.
 const DEMO_FLAGS: Record<string, string> = {
   "lab-1": "flag{sqli_fundamentals_2026}",
   "lab-2": "flag{privesc_linux_2026}",
@@ -19,38 +21,12 @@ const DEMO_FLAGS: Record<string, string> = {
 
 const FLAG_REGEX = /^(flag|aegis)\{[^}]+\}$/
 function isValidFlagFormat(flag: string): boolean {
-  const trimmed = flag.trim()
-  return FLAG_REGEX.test(trimmed)
+  return FLAG_REGEX.test(flag.trim())
 }
 
-function getClientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")
-  if (forwarded) return forwarded.split(",")[0].trim()
-  const realIp = request.headers.get("x-real-ip")
-  if (realIp) return realIp.trim()
-  return "unknown"
-}
-
-function checkRateLimit(key: string, max = 5, windowMs = 60_000): { limited: boolean; remaining: number; resetMs: number } {
-  const now = Date.now()
-  const entry = rateMap.get(key)
-  if (!entry || now > entry.resetAt) {
-    return { limited: false, remaining: max, resetMs: 0 }
-  }
-  const limited = entry.count >= max
-  const remaining = Math.max(0, max - entry.count)
-  const resetMs = entry.resetAt - now
-  return { limited, remaining, resetMs }
-}
-
-function recordAttempt(key: string, windowMs = 60_000) {
-  const now = Date.now()
-  const entry = rateMap.get(key)
-  if (!entry || now > entry.resetAt) {
-    rateMap.set(key, { count: 1, resetAt: now + windowMs })
-  } else {
-    entry.count += 1
-  }
+function normalizeFlag(flag: string): string {
+  // allow aegis{...} / flag{...} prefix swap, case-insensitive compare
+  return flag.trim().replace(/^aegis\{/i, "flag{").toLowerCase()
 }
 
 export async function POST(
@@ -61,15 +37,13 @@ export async function POST(
   const ip = getClientIp(request)
   const rateKey = `flag:${id}:${ip}`
 
-  const { limited, resetMs } = checkRateLimit(rateKey, 5, 60_000)
+  const { limited, resetMs } = checkRateLimitServer(rateKey, 5, 60_000)
   if (limited) {
     return Response.json(
       { correct: false, error: "Rate limited. Try again soon.", retryAfterMs: resetMs },
       {
         status: 429,
-        headers: {
-          "Retry-After": Math.ceil(resetMs / 1000).toString(),
-        },
+        headers: { "Retry-After": Math.ceil(resetMs / 1000).toString() },
       }
     )
   }
@@ -78,59 +52,103 @@ export async function POST(
   try {
     body = await request.json()
   } catch {
-    recordAttempt(rateKey)
+    recordAttemptServer(rateKey)
     return Response.json({ correct: false, error: "Invalid JSON body" }, { status: 400 })
   }
 
   const flag = (body as { flag?: unknown })?.flag
-
   if (typeof flag !== "string" || flag.trim().length === 0) {
-    recordAttempt(rateKey)
+    recordAttemptServer(rateKey)
     return Response.json({ correct: false, error: "Missing 'flag' field" }, { status: 400 })
   }
 
   const trimmed = flag.trim()
-
-  // Enforce format validation before checking correctness
   if (!isValidFlagFormat(trimmed)) {
-    recordAttempt(rateKey)
+    recordAttemptServer(rateKey)
     return Response.json(
       { correct: false, error: "Invalid flag format. Expected flag{...} or aegis{...}" },
       { status: 400 }
     )
   }
 
-  // Determine correctness
-  const expected = DEMO_FLAGS[id]
+  // 1) DB lab (authoritative) — verify against scrypt flag_hash
   let correct = false
-
-  if (expected) {
-    correct = trimmed === expected
-    // also allow case-insensitive aegis/flag prefix swap for demo convenience
-    if (!correct) {
-      const normalizedSubmitted = trimmed.replace(/^aegis\{/i, "flag{")
-      const normalizedExpected = expected.replace(/^aegis\{/i, "flag{")
-      correct = normalizedSubmitted.toLowerCase() === normalizedExpected.toLowerCase()
+  let labRow: Record<string, unknown> | null = null
+  const supabase = getServiceSupabase()
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("labs")
+        .select("id,title,flag_hash")
+        .eq("id", id)
+        .limit(1)
+      if (!error && data && data.length > 0) labRow = data[0] as Record<string, unknown>
+    } catch (err) {
+      console.warn("[api/labs/flag] DB lookup failed, using demo fallback:", err)
     }
+  }
+
+  if (labRow && typeof labRow.flag_hash === "string" && labRow.flag_hash) {
+    correct = await verifyPassword(trimmed, labRow.flag_hash)
+  } else if (labRow) {
+    // Lab exists in DB but no flag configured
+    correct = false
   } else {
-    // For unknown labs: any valid-format flag is considered correct if it doesn't look like garbage?
-    // Keep demo behavior: accept any valid flag as correct for non-demo labs so platform is testable
-    correct = true
+    // 2) Demo labs fallback (DB unconfigured or lab not migrated yet)
+    const expected = DEMO_FLAGS[id]
+    if (expected) {
+      correct = normalizeFlag(trimmed) === normalizeFlag(expected)
+    } else {
+      correct = false
+    }
   }
 
   if (!correct) {
-    recordAttempt(rateKey)
+    recordAttemptServer(rateKey)
+    return Response.json(
+      { correct: false, message: "Incorrect flag. Try again.", ...(labRow && !labRow.flag_hash ? { hint: "Flag not configured for this lab yet." } : {}) },
+      { headers: { "Cache-Control": "no-store" } }
+    )
+  }
+
+  // Correct: record progress for logged-in users (best-effort, non-blocking failure)
+  let progressSaved = false
+  if (labRow && supabase) {
+    const token = getSessionToken(request)
+    const user = token ? await getUserBySession(token) : null
+    if (user) {
+      try {
+        const labId = String(labRow.id)
+        const now = new Date().toISOString()
+        const existing = await supabase
+          .from("progress")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("lab_id", labId)
+          .limit(1)
+        if (existing.data && existing.data.length > 0) {
+          await supabase
+            .from("progress")
+            .update({ status: "completed", progress: 100, updated_at: now })
+            .eq("id", existing.data[0].id as string)
+        } else {
+          await supabase.from("progress").insert({
+            user_id: user.id,
+            lab_id: labId,
+            status: "completed",
+            progress: 100,
+            updated_at: now,
+          })
+        }
+        progressSaved = true
+      } catch (err) {
+        console.warn("[api/labs/flag] progress save failed:", err)
+      }
+    }
   }
 
   return Response.json(
-    {
-      correct,
-      message: correct ? "Correct flag!" : "Incorrect flag. Try again.",
-    },
-    {
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    }
+    { correct: true, message: "Correct flag!", progressSaved },
+    { headers: { "Cache-Control": "no-store" } }
   )
 }

@@ -1,52 +1,106 @@
 "use client"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { sanitizeInput, sanitizeEmail } from "@/lib/sanitize"
 
 export type AegisUser = {
+  id: string
   email: string
   name: string
   plan: "free" | "go" | "plus"
+  role: string
+  reputation: number
   createdAt: string
   provider?: "email" | "google"
 }
+
+type AuthResult = { ok: boolean; error?: string }
 
 type AuthContextType = {
   isLoggedIn: boolean
   isLoading: boolean
   user: AegisUser | null
-  login: (email?: string, name?: string) => void
-  logout: () => void
-  loginWithGoogle: () => void
+  login: (email: string, password: string) => Promise<AuthResult>
+  signup: (name: string, email: string, password: string) => Promise<AuthResult>
+  logout: () => Promise<void>
+  loginWithGoogle: () => Promise<AuthResult>
+  refresh: () => Promise<void>
 }
 
 const AuthContext = React.createContext<AuthContextType | null>(null)
 
-function deriveName(email?: string, explicitName?: string): string {
-  if (explicitName?.trim()) {
-    const sanitized = sanitizeInput(explicitName, 64)
-    if (sanitized) return sanitized
+// ---------------------------------------------------------------------------
+// Server payload -> AegisUser (never trust blindly: normalize every field)
+// ---------------------------------------------------------------------------
+
+function normalizePlan(raw: unknown): AegisUser["plan"] {
+  return raw === "go" || raw === "plus" ? raw : "free"
+}
+
+function normalizeUser(payload: unknown): AegisUser | null {
+  if (!payload || typeof payload !== "object") return null
+  const o = payload as Record<string, unknown>
+  const email = typeof o.email === "string" ? o.email.trim().toLowerCase() : ""
+  const name = typeof o.name === "string" ? o.name.trim() : ""
+  if (!email.includes("@") || !name) return null
+  return {
+    id: typeof o.id === "string" ? o.id : "",
+    email,
+    name: name.slice(0, 64),
+    plan: normalizePlan(o.plan),
+    role: typeof o.role === "string" ? o.role : "user",
+    reputation: typeof o.reputation === "number" ? o.reputation : 0,
+    createdAt: typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString(),
+    provider: o.provider === "google" ? "google" : "email",
   }
-  if (!email) return "Guest"
-  const trimmed = email.trim()
-  if (!trimmed) return "Guest"
-  const local = trimmed.split("@")[0] || ""
-  const parts = local.split(/[._-]+/).filter(Boolean)
-  if (parts.length === 0) return "Guest"
-  const joined = parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")
-  const sanitized = sanitizeInput(joined, 64)
-  return sanitized || "Guest"
 }
 
-function normalizePlan(raw: string | null): AegisUser["plan"] {
-  if (raw === "go" || raw === "plus") return raw
-  return "free"
+// Mirror the authenticated user into localStorage for legacy readers
+// (settings, billing, labs, profile pages). Auth itself is server-side
+// via the httpOnly aegis_session cookie — localStorage is UI-only.
+function mirrorUserToStorage(user: AegisUser | null) {
+  try {
+    if (user) {
+      localStorage.setItem("aegis_user", JSON.stringify(user))
+      localStorage.setItem("aegis_auth", "1")
+      localStorage.setItem("aegis_email", user.email)
+      localStorage.setItem("aegis_plan", user.plan)
+      if (user.provider) localStorage.setItem("aegis_provider", user.provider)
+    } else {
+      localStorage.removeItem("aegis_user")
+      localStorage.removeItem("aegis_auth")
+      localStorage.removeItem("aegis_email")
+      localStorage.removeItem("aegis_plan")
+      localStorage.removeItem("aegis_provider")
+    }
+  } catch {
+    /* storage may be unavailable — non-fatal */
+  }
 }
 
-function isValidAegisUser(obj: unknown): obj is AegisUser {
-  if (!obj || typeof obj !== "object") return false
-  const o = obj as Record<string, unknown>
-  return typeof o.email === "string" && !!sanitizeEmail(o.email) && typeof o.name === "string" && !!o.name.trim()
+function clearLegacyAuth() {
+  try {
+    mirrorUserToStorage(null)
+    localStorage.removeItem("aegis_admin_auth")
+    sessionStorage.removeItem("aegis_csrf_token")
+    document.cookie = "aegis_csrf_token=; Path=/; Max-Age=0; SameSite=Strict"
+    document.cookie = "aegis_admin_session=; Path=/; Max-Age=0; SameSite=Strict"
+  } catch {
+    /* non-fatal */
+  }
+}
+
+async function parseAuthResponse(res: Response): Promise<{ user: AegisUser | null; error?: string }> {
+  let body: unknown = null
+  try {
+    body = await res.json()
+  } catch {
+    return { user: null, error: "Unexpected server response" }
+  }
+  const o = (body ?? {}) as Record<string, unknown>
+  const user = normalizeUser(o.user)
+  if (res.ok && user) return { user }
+  const error = typeof o.error === "string" ? o.error : `Request failed (${res.status})`
+  return { user: null, error }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -55,227 +109,137 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState(true)
   const router = useRouter()
 
-  // Hydration-safe: only read localStorage inside useEffect
+  const applyUser = React.useCallback((next: AegisUser | null) => {
+    setUser(next)
+    setIsLoggedIn(Boolean(next))
+    mirrorUserToStorage(next)
+  }, [])
+
+  // Load the real session from the server on mount (httpOnly cookie -> user)
   React.useEffect(() => {
     let cancelled = false
-
-    function syncFromStorage() {
+    async function loadSession() {
       try {
-        const rawUser = localStorage.getItem("aegis_user")
-        if (rawUser) {
-          const parsed = JSON.parse(rawUser) as unknown
-          if (isValidAegisUser(parsed)) {
-            const email = sanitizeEmail((parsed as AegisUser).email)
-            if (!email) {
-              // Invalid email -> not logged in, clear poisoned data
-              if (!cancelled) {
-                setUser(null)
-                setIsLoggedIn(false)
-              }
-              return
-            }
-            const normalized: AegisUser = {
-              email,
-              name: sanitizeInput((parsed as AegisUser).name, 64) || deriveName(email),
-              plan: normalizePlan((parsed as AegisUser).plan ?? localStorage.getItem("aegis_plan")),
-              createdAt: (parsed as AegisUser).createdAt || new Date().toISOString(),
-              provider: (parsed as AegisUser).provider === "google" ? "google" : "email",
-            }
-            if (!cancelled) {
-              setUser(normalized)
-              setIsLoggedIn(true)
-            }
-            // keep legacy keys in sync for paid checks (but only when valid)
-            try {
-              localStorage.setItem("aegis_auth", "1")
-              localStorage.setItem("aegis_email", email)
-              localStorage.setItem("aegis_plan", normalized.plan)
-              if (normalized.provider) localStorage.setItem("aegis_provider", normalized.provider)
-              else localStorage.removeItem("aegis_provider")
-            } catch {}
-            return
-          } else {
-            // invalid structure -> clear
-            try {
-              localStorage.removeItem("aegis_user")
-            } catch {}
-          }
-        }
-
-        // migrate legacy aegis_auth / aegis_email — but STRICT: require valid email
-        const legacyAuth = localStorage.getItem("aegis_auth")
-        const legacyEmailRaw = localStorage.getItem("aegis_email")
-        const legacyPlan = normalizePlan(localStorage.getItem("aegis_plan"))
-        const legacyProvider = localStorage.getItem("aegis_provider") as AegisUser["provider"] | null
-
-        if (legacyAuth === "1") {
-          const sanitizedLegacyEmail = legacyEmailRaw ? sanitizeEmail(legacyEmailRaw) : null
-          if (!sanitizedLegacyEmail) {
-            // No valid email -> do NOT auto-bypass. Clear stale auth flag and remain logged out.
-            try {
-              localStorage.removeItem("aegis_auth")
-              localStorage.removeItem("aegis_email")
-              localStorage.removeItem("aegis_provider")
-            } catch {}
-            if (!cancelled) {
-              setUser(null)
-              setIsLoggedIn(false)
-            }
-            return
-          }
-          const name = deriveName(sanitizedLegacyEmail)
-          const migrated: AegisUser = {
-            email: sanitizedLegacyEmail,
-            name,
-            plan: legacyPlan,
-            createdAt: new Date().toISOString(),
-            provider: legacyProvider === "google" ? "google" : "email",
-          }
-          try {
-            localStorage.setItem("aegis_user", JSON.stringify(migrated))
-          } catch {}
-          if (!cancelled) {
-            setUser(migrated)
-            setIsLoggedIn(true)
-          }
-          return
-        }
-
-        // No valid session found
-        if (!cancelled) {
-          setUser(null)
-          setIsLoggedIn(false)
-        }
+        const res = await fetch("/api/auth/session", { credentials: "same-origin" })
+        const { user: u } = await parseAuthResponse(res)
+        if (!cancelled) applyUser(res.ok ? u : null)
       } catch {
-        if (!cancelled) {
-          setUser(null)
-          setIsLoggedIn(false)
-        }
+        if (!cancelled) applyUser(null)
       } finally {
         if (!cancelled) setIsLoading(false)
       }
     }
+    loadSession()
+    return () => {
+      cancelled = true
+    }
+  }, [applyUser])
 
-    syncFromStorage()
-
-    // Cross-tab sync: if auth changes in another tab, update this tab
+  // Cross-tab sync: another tab logged in/out -> mirror here
+  React.useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (
-        e.key === "aegis_user" ||
-        e.key === "aegis_auth" ||
-        e.key === "aegis_email" ||
-        e.key === "aegis_plan" ||
-        e.key === "aegis_provider" ||
-        e.key === null // clear()
-      ) {
-        syncFromStorage()
+      if (e.key === "aegis_user" || e.key === "aegis_auth" || e.key === null) {
+        if (e.key === null) {
+          applyUser(null)
+          return
+        }
+        try {
+          if (e.newValue === null) {
+            applyUser(null)
+          } else {
+            const parsed = normalizeUser(JSON.parse(e.newValue))
+            applyUser(parsed)
+          }
+        } catch {
+          applyUser(null)
+        }
       }
     }
     window.addEventListener("storage", onStorage)
-    return () => {
-      cancelled = true
-      window.removeEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [applyUser])
+
+  const refresh = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/session", { credentials: "same-origin" })
+      const { user: u } = await parseAuthResponse(res)
+      applyUser(res.ok ? u : null)
+    } catch {
+      applyUser(null)
+    }
+  }, [applyUser])
+
+  const login = React.useCallback(
+    async (email: string, password: string): Promise<AuthResult> => {
+      const trimmedEmail = email.trim().toLowerCase()
+      if (!trimmedEmail.includes("@")) return { ok: false, error: "Enter a valid email address." }
+      if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters." }
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ email: trimmedEmail, password }),
+        })
+        const { user: u, error } = await parseAuthResponse(res)
+        if (!res.ok || !u) return { ok: false, error: error ?? "Invalid email or password." }
+        applyUser(u)
+        return { ok: true }
+      } catch {
+        return { ok: false, error: "Network error. Please try again." }
+      }
+    },
+    [applyUser]
+  )
+
+  const signup = React.useCallback(
+    async (name: string, email: string, password: string): Promise<AuthResult> => {
+      const trimmedName = name.trim().slice(0, 64)
+      const trimmedEmail = email.trim().toLowerCase()
+      if (!trimmedName) return { ok: false, error: "Enter your full name." }
+      if (!trimmedEmail.includes("@")) return { ok: false, error: "Enter a valid email address." }
+      if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters." }
+      try {
+        const res = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password }),
+        })
+        const { user: u, error } = await parseAuthResponse(res)
+        if (!res.ok || !u) return { ok: false, error: error ?? "Signup failed. Please try again." }
+        applyUser(u)
+        return { ok: true }
+      } catch {
+        return { ok: false, error: "Network error. Please try again." }
+      }
+    },
+    [applyUser]
+  )
+
+  const loginWithGoogle = React.useCallback(async (): Promise<AuthResult> => {
+    // OAuth (Google) is not configured on the backend yet — no fake login.
+    return {
+      ok: false,
+      error: "Google sign-in is not configured yet. Use email and password instead.",
     }
   }, [])
 
-  const login = React.useCallback((email?: string, name?: string) => {
+  const logout = React.useCallback(async () => {
     try {
-      const existingPlan = normalizePlan(localStorage.getItem("aegis_plan"))
-      const prevUserRaw = localStorage.getItem("aegis_user")
-      let prevUser: AegisUser | null = null
-      try {
-        const parsed = prevUserRaw ? (JSON.parse(prevUserRaw) as unknown) : null
-        if (isValidAegisUser(parsed)) prevUser = parsed as AegisUser
-      } catch {}
-
-      // STRICT: require a valid email from explicit arg, prevUser, or stored email — no hardcoded fallback
-      const rawEmailCandidate = (email?.trim() || prevUser?.email || localStorage.getItem("aegis_email") || "").trim()
-      const sanitizedEmail = rawEmailCandidate ? sanitizeEmail(rawEmailCandidate) : null
-      if (!sanitizedEmail) {
-        // Do not auto-bypass with fake email
-        setUser(null)
-        setIsLoggedIn(false)
-        return
-      }
-      const finalEmail = sanitizedEmail
-      const finalName = deriveName(finalEmail, name ? sanitizeInput(name, 64) : prevUser?.name)
-      const plan = prevUser?.plan || existingPlan || "free"
-      const createdAt = prevUser?.createdAt || new Date().toISOString()
-      const next: AegisUser = { email: finalEmail, name: finalName, plan, createdAt, provider: "email" }
-      localStorage.setItem("aegis_user", JSON.stringify(next))
-      localStorage.setItem("aegis_auth", "1")
-      localStorage.setItem("aegis_email", finalEmail)
-      localStorage.setItem("aegis_plan", plan)
-      localStorage.removeItem("aegis_provider")
-      setUser(next)
-      setIsLoggedIn(true)
+      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" })
     } catch {
-      // Harden: failure should NOT leave user authenticated
-      setUser(null)
-      setIsLoggedIn(false)
+      /* server unreachable — clear local state anyway */
     }
-  }, [])
-
-  const loginWithGoogle = React.useCallback(() => {
-    try {
-      const existingPlan = normalizePlan(localStorage.getItem("aegis_plan"))
-      const prevUserRaw = localStorage.getItem("aegis_user")
-      let prevUser: AegisUser | null = null
-      try {
-        const parsed = prevUserRaw ? (JSON.parse(prevUserRaw) as unknown) : null
-        if (isValidAegisUser(parsed)) prevUser = parsed as AegisUser
-      } catch {}
-      const legacyEmail = localStorage.getItem("aegis_email")
-      const rawEmailCandidate = (prevUser?.email || legacyEmail || "").trim()
-      const sanitized = rawEmailCandidate ? sanitizeEmail(rawEmailCandidate) : null
-      if (!sanitized) {
-        // Google flow requires a valid email; without it do not create a fake user
-        setUser(null)
-        setIsLoggedIn(false)
-        return
-      }
-      const email = sanitized
-      const name = prevUser?.name ? sanitizeInput(prevUser.name, 64) || deriveName(email) : deriveName(email)
-      const plan = prevUser?.plan || existingPlan || "free"
-      const createdAt = prevUser?.createdAt || new Date().toISOString()
-      const next: AegisUser = { email, name, plan, createdAt, provider: "google" }
-      localStorage.setItem("aegis_user", JSON.stringify(next))
-      localStorage.setItem("aegis_auth", "1")
-      localStorage.setItem("aegis_email", email)
-      localStorage.setItem("aegis_plan", plan)
-      localStorage.setItem("aegis_provider", "google")
-      setUser(next)
-      setIsLoggedIn(true)
-    } catch {
-      setUser(null)
-      setIsLoggedIn(false)
-      return
-    }
-    router.push("/dashboard")
-  }, [router])
-
-  const logout = React.useCallback(() => {
-    try {
-      localStorage.removeItem("aegis_auth")
-      localStorage.removeItem("aegis_email")
-      localStorage.removeItem("aegis_provider")
-      localStorage.removeItem("aegis_user")
-      localStorage.removeItem("aegis_plan")
-      // Remove legacy/admin artifacts if present (client-side only)
-      localStorage.removeItem("aegis_admin_auth")
-      sessionStorage.removeItem("aegis_csrf_token")
-      document.cookie = "aegis_csrf_token=; Path=/; Max-Age=0; SameSite=Strict"
-      // Clear admin session cookie if set without HttpOnly (best-effort)
-      document.cookie = "aegis_admin_session=; Path=/; Max-Age=0; SameSite=Strict"
-    } catch {}
+    clearLegacyAuth()
     setUser(null)
     setIsLoggedIn(false)
     router.push("/login")
   }, [router])
 
   const value = React.useMemo(
-    () => ({ isLoggedIn, isLoading, user, login, logout, loginWithGoogle }),
-    [isLoggedIn, isLoading, user, login, logout, loginWithGoogle]
+    () => ({ isLoggedIn, isLoading, user, login, signup, logout, loginWithGoogle, refresh }),
+    [isLoggedIn, isLoading, user, login, signup, logout, loginWithGoogle, refresh]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

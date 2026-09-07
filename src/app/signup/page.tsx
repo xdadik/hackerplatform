@@ -25,12 +25,22 @@ function GoogleIcon() {
 }
 
 export default function SignupPage() {
-  const { login, loginWithGoogle } = useAuth()
+  const { signup, loginWithGoogle } = useAuth()
   const [show, setShow] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
+  const [googleNote, setGoogleNote] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
-  const onSubmit = (e: React.FormEvent) => {
+  const shakeCard = (id: string) => {
+    const card = document.getElementById(id)
+    if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      import("animejs").then(({ animate }) => {
+        animate(card, { x: [0, -6, 6, -4, 4, 0], duration: 420, ease: "outQuad" })
+      }).catch(() => {})
+    }
+  }
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const rl = loginLimiter.check()
     if (rl.limited) {
@@ -44,24 +54,32 @@ export default function SignupPage() {
     const emailRaw = (form.elements.namedItem("email") as HTMLInputElement).value
     const password = (form.elements.namedItem("password") as HTMLInputElement).value
     const name = sanitizeInput(nameRaw, 64)
-    const email = sanitizeEmail(emailRaw) || emailRaw.trim()
-      setTimeout(() => {
+    const email = sanitizeEmail(emailRaw) || emailRaw.trim().toLowerCase()
+
+    if (!name || !email.includes("@") || password.length < 8) {
+      loginLimiter.record(false)
+      setError("Please enter a name, valid email, and password with at least 8 characters.")
+      shakeCard("signup-card")
       setLoading(false)
-      if (!name || !email.includes("@") || password.length < 8) {
-        loginLimiter.record(false)
-        setError("Please enter a name, valid email, and password with at least 8 characters.")
-        const card = document.getElementById("signup-card")
-        if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          import("animejs").then(({ animate }) => {
-            animate(card, { x: [0, -6, 6, -4, 4, 0], duration: 420, ease: "outQuad" })
-          })
-        }
-        return
-      }
-      loginLimiter.reset()
-      login(email, name)
-      window.location.href = "/dashboard"
-    }, 900)
+      return
+    }
+
+    // Real backend call — POST /api/auth/signup (scrypt hash, httpOnly session cookie)
+    const result = await signup(name, email, password)
+    setLoading(false)
+    if (!result.ok) {
+      loginLimiter.record(false)
+      setError(result.error ?? "Signup failed. Please try again.")
+      shakeCard("signup-card")
+      return
+    }
+    loginLimiter.reset()
+    window.location.href = "/dashboard"
+  }
+
+  const onGoogle = async () => {
+    const result = await loginWithGoogle()
+    setGoogleNote(result.ok ? null : (result.error ?? "Google sign-in unavailable."))
   }
 
   return (
@@ -91,9 +109,12 @@ export default function SignupPage() {
                 <CardDescription>Professional-grade — no spam, no gamification. Just serious tooling.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button type="button" onClick={loginWithGoogle} variant="secondary" className="w-full h-9 rounded-[8px] border border-[var(--border)] bg-white dark:bg-white text-zinc-700 hover:bg-zinc-50 gap-2 font-[500]">
+                <Button type="button" onClick={onGoogle} variant="secondary" className="w-full h-9 rounded-[8px] border border-[var(--border)] bg-white dark:bg-white text-zinc-700 hover:bg-zinc-50 gap-2 font-[500]">
                   <GoogleIcon /> Continue with Google
                 </Button>
+                {googleNote && (
+                  <p className="pt-2 text-[11px] text-center text-[var(--text-2)]">{googleNote}</p>
+                )}
                 <div className="relative flex items-center gap-3 pt-2">
                   <span className="h-px flex-1 bg-[var(--border)]" />
                   <span className="text-[11px] text-[var(--text-3)]">or continue with email</span>

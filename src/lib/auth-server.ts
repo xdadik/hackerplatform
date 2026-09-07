@@ -137,7 +137,7 @@ export async function getUserBySession(token: string | null | undefined): Promis
   const tokenHash = sha256(token)
   const { data, error } = await supabase
     .from("sessions")
-    .select("user_id, expires_at")
+    .select("id, user_id, expires_at, last_seen_at")
     .eq("token_hash", tokenHash)
     .limit(1)
   if (error || !data || data.length === 0) return null
@@ -146,6 +146,21 @@ export async function getUserBySession(token: string | null | undefined): Promis
     await supabase.from("sessions").delete().eq("token_hash", tokenHash)
     return null
   }
+
+  // Sliding expiration: extend the session when it was last seen > 1h ago.
+  // Also opportunistically clean up this user's expired sessions.
+  try {
+    const lastSeen = new Date(row.last_seen_at).getTime()
+    const oneHour = 3600 * 1000
+    if (Number.isFinite(lastSeen) && Date.now() - lastSeen > oneHour) {
+      const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 3600 * 1000).toISOString()
+      await supabase.from("sessions").update({ last_seen_at: new Date().toISOString(), expires_at: expiresAt }).eq("id", row.id)
+      await supabase.from("sessions").delete().eq("user_id", row.user_id).lt("expires_at", new Date().toISOString())
+    }
+  } catch {
+    /* sliding refresh is best-effort — never block auth on it */
+  }
+
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("*")
@@ -181,6 +196,30 @@ export function rowToSessionUser(row: Record<string, unknown>): SessionUser {
     provider: String(row.provider ?? "email"),
     reputation: Number(row.reputation ?? 0),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Password policy — shared by signup (and future password reset)
+// ---------------------------------------------------------------------------
+
+const COMMON_PASSWORDS = new Set([
+  "password", "password1", "password123", "passw0rd", "p@ssw0rd",
+  "12345678", "123456789", "1234567890", "qwerty123", "qwertyuiop",
+  "letmein", "letmein123", "iloveyou", "admin123", "admin1234",
+  "welcome1", "welcome123", "abc12345", "test1234", "testtest",
+  "hackerman", "hackme123", "aegis123", "cybersecurity",
+])
+
+export function validatePasswordPolicy(password: string): { ok: boolean; error?: string } {
+  if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters" }
+  if (password.length > 128) return { ok: false, error: "Password must be at most 128 characters" }
+  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return { ok: false, error: "Password must contain both letters and numbers" }
+  }
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    return { ok: false, error: "This password is too common — choose something stronger" }
+  }
+  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------

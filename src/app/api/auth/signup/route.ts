@@ -1,10 +1,9 @@
-import { createSession, createUser } from "@/lib/auth-server"
+import { createSession, createUser, validatePasswordPolicy } from "@/lib/auth-server"
 import { sanitizeEmail } from "@/lib/sanitize"
 import { getClientIp, checkRateLimitServer, recordAttemptServer } from "@/lib/rate-limit-server"
 
 export const runtime = "nodejs"
 
-const PASS_MIN = 8
 const NAME_MAX = 64
 
 export async function POST(request: Request) {
@@ -30,9 +29,10 @@ export async function POST(request: Request) {
     recordAttemptServer(`signup:${ip}`)
     return Response.json({ error: "Valid email required" }, { status: 400 })
   }
-  if (password.length < PASS_MIN) {
+  const policy = validatePasswordPolicy(password)
+  if (!policy.ok) {
     recordAttemptServer(`signup:${ip}`)
-    return Response.json({ error: `Password must be at least ${PASS_MIN} characters` }, { status: 400 })
+    return Response.json({ error: policy.error }, { status: 400 })
   }
   if (!name) {
     recordAttemptServer(`signup:${ip}`)
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const token = await createSession(user.id)
     const isSecure = process.env.NODE_ENV === "production"
     return Response.json(
-      { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role }, ok: true },
+      { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role, provider: user.provider, reputation: user.reputation }, ok: true },
       {
         status: 201,
         headers: {

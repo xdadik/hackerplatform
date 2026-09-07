@@ -35,7 +35,11 @@ function applySecurityHeaders(res: NextResponse): void {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isAdminApi = pathname.startsWith("/api/admin");
+  // Login/logout must stay reachable so an admin can obtain the session
+  // cookie in the first place (otherwise nobody could ever authenticate).
+  const isAuthEndpoint =
+    pathname === "/api/admin/login" || pathname === "/api/admin/logout";
+  const isAdminApi = pathname.startsWith("/api/admin") && !isAuthEndpoint;
 
   if (isAdminPage || isAdminApi) {
     const cookieHeader = request.headers.get("cookie") ?? "";
