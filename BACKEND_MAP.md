@@ -82,6 +82,14 @@ git add -A; git commit -m "backend: ..."; git push
 ```
 → GitHub Actions `.github/workflows/deploy-cloudflare.yml` builds with `@cloudflare/next-on-pages` → live on `aegis.pages.dev`. Set the env vars from step 2 in the Cloudflare dashboard BEFORE the first real deployment, then trigger a rebuild (push an empty commit or use "Retry deployment").
 
+> ⚠️ **CURRENT BLOCKER (account-level, not code)**: GitHub Actions runs fail with
+> *"The job was not started because your account is locked due to a billing issue."*
+> Fix at https://github.com/settings/billing (payment method / plan). The code is
+> pushed and ready — once billing is unlocked, re-run the workflow from the Actions
+> tab (or push an empty commit) and it will deploy. Cloudflare Workers Builds (the
+> dashboard Git integration) also runs on push; check its logs at
+> dash.cloudflare.com → Workers → hackerplatform → Builds if that path is preferred.
+
 ## 5. Known gaps (nice-to-haves, not blockers)
 - `loginWithGoogle` is a stub — needs Supabase OAuth (add `signInWithOAuth` + callback route) if you want Google login.
 - Rate limiting is per-instance in memory; move to a `rate_limits` table or Cloudflare KV if you scale horizontally.
