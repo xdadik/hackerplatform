@@ -4,7 +4,7 @@ import { env } from "@/lib/env"
 
 export const runtime = "nodejs"
 
-const TABLES = ["users", "videos", "events", "news", "cves", "labs", "challenges", "settings", "messages"] as const
+const TABLES = ["users", "videos", "events", "news", "cves", "labs", "challenges", "settings", "messages", "entitlements"] as const
 type Table = (typeof TABLES)[number]
 
 function isTable(t: string): t is Table {
@@ -61,6 +61,8 @@ async function toPatch(table: Table, body: Record<string, unknown>): Promise<Rec
       if (status) row.status = status
       const role = oneOf(body.role, ["user", "moderator", "admin"] as const)
       if (role) row.role = role
+      const plan = oneOf(body.plan, ["free", "go", "plus"] as const)
+      if (plan) row.plan = plan
       if (typeof body.password === "string" && body.password.length > 0) {
         if (body.password.length < 8) throw new Error("Password must be at least 8 characters")
         row.password_hash = await hashPassword(body.password)
@@ -159,6 +161,30 @@ async function toPatch(table: Table, body: Record<string, unknown>): Promise<Rec
     }
     case "messages": {
       if (body.read !== undefined) row.read = !!body.read
+      break
+    }
+    case "entitlements": {
+      if (body.user_id !== undefined || body.userId !== undefined) {
+        const userId = str(body.user_id ?? body.userId, 80)
+        if (userId) row.user_id = userId
+      }
+      if (body.resource_type !== undefined || body.resourceType !== undefined) {
+        const resourceType = str(body.resource_type ?? body.resourceType, 20)
+        if (resourceType) {
+          if (!(["lab", "lesson", "video", "challenge"] as readonly string[]).includes(resourceType)) {
+            throw new Error("Invalid resource_type (lab, lesson, video, challenge)")
+          }
+          row.resource_type = resourceType
+        }
+      }
+      if (body.resource_id !== undefined || body.resourceId !== undefined) {
+        const resourceId = str(body.resource_id ?? body.resourceId, 200)
+        if (resourceId) row.resource_id = resourceId
+      }
+      if (body.granted_by !== undefined || body.grantedBy !== undefined) {
+        const grantedBy = str(body.granted_by ?? body.grantedBy, 64)
+        if (grantedBy) row.granted_by = grantedBy
+      }
       break
     }
   }

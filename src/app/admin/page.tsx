@@ -15,7 +15,7 @@ import {
   Plus, Trash2, Edit2, Search, Save, X, Eye, Ban, CheckCircle2, Upload, Star, MessageSquare, Send
 } from "lucide-react"
 
-type AdminUser = { id: string; username: string; email: string; reputation: number; status: "Active" | "Pending" | "Banned"; role: "user" | "admin" | "moderator" }
+type AdminUser = { id: string; username: string; email: string; reputation: number; status: "Active" | "Pending" | "Banned"; role: "user" | "admin" | "moderator"; plan: "free" | "go" | "plus" }
 type AdminVideo = { id: string; title: string; subtitle: string; duration: string; module: string; path: string; featured: boolean; youtubeId: string; description: string }
 type AdminEvent = { id: string; title: string; type: "CTF" | "Workshop" | "Competition"; date: string; status: "Live" | "Upcoming" | "Ended"; participants: number }
 type AdminNews = { id: string; title: string; excerpt: string; author: string; tags: string; views: number; status: "Published" | "Draft" | "Pending"; content: string }
@@ -175,6 +175,12 @@ export default function AdminPage() {
   const [inboxUser, setInboxUser] = React.useState<string | null>(null)
   const [replyDraft, setReplyDraft] = React.useState("")
 
+  type AdminGrant = { id: string; user_id: string; userEmail: string; userName: string; resource_type: string; resource_id: string; granted_by: string; created_at: string }
+  const [grants, setGrants] = React.useState<AdminGrant[]>([])
+  const [grantUserId, setGrantUserId] = React.useState("")
+  const [grantType, setGrantType] = React.useState("lab")
+  const [grantResource, setGrantResource] = React.useState("")
+
   const [maintenance, setMaintenance] = React.useState(false)
   const [announcement, setAnnouncement] = React.useState("")
   const [dataLoading, setDataLoading] = React.useState(false)
@@ -186,7 +192,7 @@ export default function AdminPage() {
     try {
       const results = await Promise.allSettled([
         adminApi("users"), adminApi("videos"), adminApi("events"), adminApi("news"),
-        adminApi("cves"), adminApi("labs"), adminApi("challenges"), adminApi("settings"), adminApi("messages"),
+        adminApi("cves"), adminApi("labs"), adminApi("challenges"), adminApi("settings"), adminApi("messages"), adminApi("entitlements"),
       ])
       const get = (i: number) => {
         const r = results[i]
@@ -200,6 +206,7 @@ export default function AdminPage() {
       setAdminLabs(get(5) as unknown as AdminLab[])
       setAdminChallenges(get(6) as unknown as AdminChallenge[])
       setInbox(get(8) as unknown as AdminMessage[])
+      setGrants(get(9) as unknown as AdminGrant[])
       const settings = Object.fromEntries((get(7) as { key: string; value: string }[]).map(x => [x.key, x.value]))
       setAnnouncement(settings.announcement ?? "")
       setMaintenance(settings.maintenance === "1")
@@ -335,9 +342,11 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Activity className="w-4 h-4" /> Audit logs</CardTitle></CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Activity className="w-4 h-4" /> Content</CardTitle></CardHeader>
                 <CardContent className="space-y-2 text-[12px]">
-                  <div className="p-3 rounded-[8px] border border-dashed border-[var(--border)] text-center text-[var(--text-2)]">No audit events yet. Admin actions will be logged here.</div>
+                  <div className="flex items-center justify-between p-2.5 rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"><span className="flex items-center gap-1.5"><FlaskConical className="w-3.5 h-3.5" /> Labs</span><span className="font-mono">{adminLabs.length} • {adminLabs.filter(l=>l.hasFlag).length} with flags</span></div>
+                  <div className="flex items-center justify-between p-2.5 rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"><span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5" /> Challenges</span><span className="font-mono">{adminChallenges.length} • {adminChallenges.filter(c=>c.hasFlag).length} with flags</span></div>
+                  <div className="flex items-center justify-between p-2.5 rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"><span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> Unread support messages</span><span className="font-mono">{inbox.filter(x=>x.from_role==="user" && !x.read).length}</span></div>
                 </CardContent>
               </Card>
             </div>
@@ -373,12 +382,13 @@ export default function AdminPage() {
             <CardContent className="p-0">
               <div className="overflow-auto">
                 <table className="w-full text-left text-[13px]">
-                  <thead className="bg-[var(--surface-2)] border-y border-[var(--border)] text-[11px] tracking-widest uppercase text-[var(--text-3)]"><tr><th className="px-4 py-2.5">User</th><th className="px-4 py-2.5">Role</th><th className="px-4 py-2.5">Reputation</th><th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5 text-right">Actions</th></tr></thead>
+                  <thead className="bg-[var(--surface-2)] border-y border-[var(--border)] text-[11px] tracking-widest uppercase text-[var(--text-3)]"><tr><th className="px-4 py-2.5">User</th><th className="px-4 py-2.5">Role</th><th className="px-4 py-2.5">Plan</th><th className="px-4 py-2.5">Reputation</th><th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5 text-right">Actions</th></tr></thead>
                   <tbody className="divide-y divide-[var(--border)]">
                     {filteredUsers.map(u => (
                       <tr key={u.id} className="hover:bg-[var(--surface-2)]">
                         <td className="px-4 py-3"><div className="font-[600]">{u.username}</div><div className="text-[11px] text-[var(--text-3)]">{u.email}</div></td>
                         <td className="px-4 py-3"><Badge variant={u.role==="admin"?"default":u.role==="moderator"?"secondary":"outline"} className="capitalize text-[11px]">{u.role}</Badge></td>
+                        <td className="px-4 py-3"><Badge variant={u.plan==="free"?"outline":"secondary"} className="text-[11px]">{u.plan || "free"}</Badge></td>
                         <td className="px-4 py-3 font-mono">{u.reputation.toLocaleString()}</td>
                         <td className="px-4 py-3"><Badge className={`text-[11px] border ${u.status==="Active" ? "bg-emerald-600 text-white border-emerald-600" : u.status==="Banned" ? "bg-red-600 text-white border-red-600" : "bg-amber-100 text-amber-900 border-amber-200"}`}>{u.status}</Badge></td>
                         <td className="px-4 py-3 text-right flex justify-end gap-1.5">
@@ -434,6 +444,8 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Email</label><Input value={editingUser.email} onChange={e=>setEditingUser({...editingUser,email:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[180px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Reputation</label><Input type="number" value={editingUser.reputation} onChange={e=>setEditingUser({...editingUser,reputation:parseInt(e.target.value)||0})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[100px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Role</label><select value={editingUser.role} onChange={e=>setEditingUser({...editingUser,role:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Plan</label><select value={editingUser.plan || "free"} onChange={e=>setEditingUser({...editingUser,plan:e.target.value as AdminUser["plan"]})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option value="free">free</option><option value="go">go</option><option value="plus">plus</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingUser.status} onChange={e=>setEditingUser({...editingUser,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Active</option><option>Pending</option><option>Banned</option></select></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
@@ -442,13 +454,67 @@ export default function AdminPage() {
                       username: sanitizeInput(editingUser.username, 32),
                       email: sanitizeEmail(editingUser.email) || editingUser.email,
                       role: (["user","moderator","admin"].includes(editingUser.role) ? editingUser.role : "user"),
+                      status: (["Active","Pending","Banned"].includes(editingUser.status) ? editingUser.status : "Active"),
+                      plan: (["free","go","plus"].includes(editingUser.plan) ? editingUser.plan : "free"),
                     }
                     try {
-                      await adminApi("users", "PATCH", clean.id, { username: clean.username, email: clean.email, reputation: clean.reputation, role: clean.role })
+                      await adminApi("users", "PATCH", clean.id, { username: clean.username, email: clean.email, reputation: clean.reputation, role: clean.role, status: clean.status, plan: clean.plan })
                       setUsers(users.map(u=>u.id===clean.id? clean: u)); setEditingUser(null)
                     } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingUser(null)}><X className="w-3.5 h-3.5" /></Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Access grants — per-user lab/lesson/video/challenge access */}
+        {active==="users" && (
+          <Card className="mt-4">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+              <CardTitle className="flex items-center gap-2"><Shield className="w-4 h-4" /> Access grants — {grants.length} <span className="text-[11px] font-normal text-[var(--text-3)]">give users access to specific labs, lessons, videos, challenges</span></CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2 items-end p-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)]">
+                <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">User</label><select value={grantUserId} onChange={e=>setGrantUserId(e.target.value)} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-[200px]"><option value="">Select user…</option>{users.map(u=><option key={u.id} value={u.id}>{u.username} • {u.email}</option>)}</select></div>
+                <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Type</label><select value={grantType} onChange={e=>setGrantType(e.target.value)} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1"><option value="lab">lab</option><option value="lesson">lesson</option><option value="video">video</option><option value="challenge">challenge</option></select></div>
+                <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Resource ID</label><Input value={grantResource} onChange={e=>setGrantResource(e.target.value)} placeholder="e.g. lab-1" list="grant-resource-ids" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /><datalist id="grant-resource-ids">{[...adminLabs.map(l=>l.id), ...videos.map(v=>v.id), ...adminChallenges.map(c=>c.id)].map(id=><option key={id} value={id} />)}</datalist></div>
+                <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
+                  if(!requireAdmin()) return
+                  if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
+                  if(!grantUserId) return alert("Select a user")
+                  if(!grantResource.trim()) return alert("Enter a resource ID")
+                  try {
+                    const data = await adminApi("entitlements", "POST", undefined, { user_id: grantUserId, resource_type: grantType, resource_id: grantResource.trim() })
+                    setGrants([...grants, data.item as unknown as AdminGrant])
+                    setGrantResource("")
+                  } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                }}><Plus className="w-3.5 h-3.5 mr-1" /> Grant access</Button>
+              </div>
+              {grants.length === 0 ? (
+                <div className="p-3 rounded-[8px] border border-dashed border-[var(--border)] text-center text-[12px] text-[var(--text-2)]">No individual grants. Users on paid plans can access everything; use grants for exceptions.</div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-left text-[13px]">
+                    <thead className="bg-[var(--surface-2)] border-y border-[var(--border)] text-[11px] tracking-widest uppercase text-[var(--text-3)]"><tr><th className="px-4 py-2.5">User</th><th className="px-4 py-2.5">Resource</th><th className="px-4 py-2.5 text-right">Actions</th></tr></thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {grants.map(g => (
+                        <tr key={g.id} className="hover:bg-[var(--surface-2)]">
+                          <td className="px-4 py-3"><div className="font-[600]">{g.userName || "—"}</div><div className="text-[11px] text-[var(--text-3)]">{g.userEmail}</div></td>
+                          <td className="px-4 py-3"><Badge variant="outline" className="text-[11px] mr-1.5">{g.resource_type}</Badge><span className="font-mono text-[12px]">{g.resource_id}</span></td>
+                          <td className="px-4 py-3 text-right"><Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            if(!confirm(`Revoke ${g.resource_type} ${g.resource_id} access?`)) return
+                            try {
+                              await adminApi("entitlements", "DELETE", g.id)
+                              setGrants(grants.filter(x=>x.id!==g.id))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Trash2 className="w-3.5 h-3.5" /></Button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>
@@ -528,6 +594,10 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={editingVideo.duration} onChange={e=>setEditingVideo({...editingVideo,duration:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Module</label><Input value={editingVideo.module} onChange={e=>setEditingVideo({...editingVideo,module:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={editingVideo.youtubeId||""} onChange={e=>setEditingVideo({...editingVideo,youtubeId:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Subtitle</label><Input value={editingVideo.subtitle||""} onChange={e=>setEditingVideo({...editingVideo,subtitle:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Path</label><Input value={editingVideo.path||""} onChange={e=>setEditingVideo({...editingVideo,path:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Featured</label><select value={editingVideo.featured?"yes":"no"} onChange={e=>setEditingVideo({...editingVideo,featured:e.target.value==="yes"})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option value="no">no</option><option value="yes">yes</option></select></div>
+                  <div className="w-full"><label className="text-[11px] font-semibold">Description</label><Input value={editingVideo.description||""} onChange={e=>setEditingVideo({...editingVideo,description:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full mt-1" /></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
@@ -537,9 +607,12 @@ export default function AdminPage() {
                       module: sanitizeInput(editingVideo.module, 64),
                       duration: sanitizeInput(editingVideo.duration, 20),
                       youtubeId: sanitizeInput(editingVideo.youtubeId||"", 20),
+                      subtitle: sanitizeInput(editingVideo.subtitle||"", 200),
+                      path: sanitizeInput(editingVideo.path||"general", 80).toLowerCase().replace(/[^a-z0-9-]/g,"-"),
+                      description: sanitizeInput(editingVideo.description||"", 2000),
                     }
                     try {
-                      await adminApi("videos", "PATCH", clean.id, { title: clean.title, module: clean.module, duration: clean.duration, youtubeId: clean.youtubeId })
+                      await adminApi("videos", "PATCH", clean.id, { title: clean.title, module: clean.module, duration: clean.duration, youtubeId: clean.youtubeId, subtitle: clean.subtitle, path: clean.path, description: clean.description, featured: clean.featured })
                       setVideos(videos.map(v=>v.id===clean.id? clean: v)); setEditingVideo(null)
                     } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
@@ -606,13 +679,16 @@ export default function AdminPage() {
               {editingEvent && (
                 <div className="p-4 border-t bg-amber-50 dark:bg-amber-950/20 flex flex-wrap gap-2 items-end">
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingEvent.title} onChange={e=>setEditingEvent({...editingEvent,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Type</label><select value={editingEvent.type} onChange={e=>setEditingEvent({...editingEvent,type:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>CTF</option><option>Workshop</option><option>Competition</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Date</label><Input value={editingEvent.date} onChange={e=>setEditingEvent({...editingEvent,date:e.target.value})} placeholder="2026-10-01" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingEvent.status} onChange={e=>setEditingEvent({...editingEvent,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Live</option><option>Upcoming</option><option>Ended</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Participants</label><Input type="number" min={0} value={editingEvent.participants} onChange={e=>setEditingEvent({...editingEvent,participants:Math.max(0,parseInt(e.target.value)||0)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[90px] mt-1" /></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     const clean: AdminEvent = { ...editingEvent, title: sanitizeInput(editingEvent.title, 120) }
                     try {
-                      await adminApi("events", "PATCH", clean.id, { title: clean.title, status: clean.status })
+                      await adminApi("events", "PATCH", clean.id, { title: clean.title, type: clean.type, date: clean.date, status: clean.status, participants: clean.participants })
                       setEvents(events.map(e=>e.id===clean.id? clean: e)); setEditingEvent(null)
                     } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
@@ -663,6 +739,7 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={newNews.title} onChange={e=>setNewNews({...newNews,title:e.target.value})} placeholder="Article title" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Author</label><Input value={newNews.author} onChange={e=>setNewNews({...newNews,author:e.target.value})} placeholder="Author" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={newNews.status} onChange={e=>setNewNews({...newNews,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Draft</option><option>Published</option><option>Pending</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Tags (comma separated)</label><Input value={newNews.tags||""} onChange={e=>setNewNews({...newNews,tags:e.target.value})} placeholder="aws, iam" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1" /></div>
                   <div className="w-full"><label className="text-[11px] font-semibold">Excerpt</label><Input value={newNews.excerpt||""} onChange={e=>setNewNews({...newNews,excerpt:e.target.value})} placeholder="Short summary..." className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full mt-1" /></div>
                   <div className="w-full"><label className="text-[11px] font-semibold">Content</label><textarea value={newNews.content||""} onChange={e=>setNewNews({...newNews,content:e.target.value})} placeholder="Article body (paragraphs separated by blank lines)..." className="w-full min-h-[90px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-2 text-[13px] mt-1" /></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
@@ -684,13 +761,14 @@ export default function AdminPage() {
                 <div className="p-4 border-t bg-blue-50 dark:bg-blue-950/20 flex flex-wrap gap-2 items-end">
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingNews.title} onChange={e=>setEditingNews({...editingNews,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingNews.status} onChange={e=>setEditingNews({...editingNews,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Published</option><option>Draft</option><option>Pending</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Tags (comma separated)</label><Input value={editingNews.tags||""} onChange={e=>setEditingNews({...editingNews,tags:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1" /></div>
                   <div className="w-full"><label className="text-[11px] font-semibold">Content</label><textarea value={editingNews.content||""} onChange={e=>setEditingNews({...editingNews,content:e.target.value})} placeholder="Article body..." className="w-full min-h-[90px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-2 text-[13px] mt-1" /></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
-                    const clean: AdminNews = { ...editingNews, title: sanitizeInput(editingNews.title,200), excerpt: sanitizeInput(editingNews.excerpt,500), author: sanitizeInput(editingNews.author,64), content: sanitizeInput(editingNews.content||"",50000) }
+                    const clean: AdminNews = { ...editingNews, title: sanitizeInput(editingNews.title,200), excerpt: sanitizeInput(editingNews.excerpt,500), author: sanitizeInput(editingNews.author,64), tags: sanitizeInput(editingNews.tags||"",200), content: sanitizeInput(editingNews.content||"",50000) }
                     try {
-                      await adminApi("news", "PATCH", clean.id, { title: clean.title, excerpt: clean.excerpt, author: clean.author, status: clean.status, content: clean.content })
+                      await adminApi("news", "PATCH", clean.id, { title: clean.title, excerpt: clean.excerpt, author: clean.author, tags: clean.tags, status: clean.status, content: clean.content })
                       setNews(news.map(n=>n.id===clean.id? clean: n)); setEditingNews(null)
                     } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
@@ -730,7 +808,7 @@ export default function AdminPage() {
                   <div className="p-4 border-t bg-[var(--surface-2)] flex flex-wrap gap-2 items-end">
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={newLab.title} onChange={e=>setNewLab({...newLab,title:e.target.value})} placeholder="Lab title" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Category</label><select value={newLab.category} onChange={e=>setNewLab({...newLab,category:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Web Security</option><option>Linux</option><option>Active Directory</option><option>Cloud Security</option><option>Forensics</option></select></div>
-                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={newLab.difficulty} onChange={e=>setNewLab({...newLab,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={newLab.difficulty} onChange={e=>setNewLab({...newLab,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={newLab.duration} onChange={e=>setNewLab({...newLab,duration:e.target.value})} placeholder="45 min" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[90px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Objectives</label><Input type="number" min={1} value={newLab.objectives ?? 1} onChange={e=>setNewLab({...newLab,objectives:Math.max(1,parseInt(e.target.value)||1)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[70px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={newLab.youtubeId||""} onChange={e=>setNewLab({...newLab,youtubeId:e.target.value})} placeholder="optional" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
@@ -742,7 +820,7 @@ export default function AdminPage() {
                       if(!newLab.title) return alert("Title required")
                       const cleanTitle = sanitizeInput(newLab.title, 120)
                       try {
-                        const data = await adminApi("labs", "POST", undefined, { title: cleanTitle, category: sanitizeInput(newLab.category||"Web Security",64), difficulty: (["Beginner","Intermediate","Advanced"].includes(newLab.difficulty as string) ? newLab.difficulty : "Beginner"), duration: sanitizeInput(newLab.duration||"60 min",20), description: sanitizeInput(newLab.description||"",2000), objectives: newLab.objectives ?? 1, youtubeId: sanitizeInput(newLab.youtubeId||"",20), flag: (newLab.flag||"").trim() || undefined })
+                        const data = await adminApi("labs", "POST", undefined, { title: cleanTitle, category: sanitizeInput(newLab.category||"Web Security",64), difficulty: (["Beginner","Intermediate","Advanced","Expert"].includes(newLab.difficulty as string) ? newLab.difficulty : "Beginner"), duration: sanitizeInput(newLab.duration||"60 min",20), description: sanitizeInput(newLab.description||"",2000), objectives: newLab.objectives ?? 1, youtubeId: sanitizeInput(newLab.youtubeId||"",20), flag: (newLab.flag||"").trim() || undefined })
                         setAdminLabs([...adminLabs, data.item as unknown as AdminLab])
                         setShowAddLab(false); setNewLab({title:"", category:"Web Security", difficulty:"Beginner", duration:"", description:"", objectives:1, youtubeId:"", flag:""})
                       } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
@@ -753,16 +831,23 @@ export default function AdminPage() {
                 {editingLab && (
                   <div className="p-4 border-t bg-blue-50 dark:bg-blue-950/20 flex flex-wrap gap-2 items-end">
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingLab.title} onChange={e=>setEditingLab({...editingLab,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Category</label><Input value={editingLab.category} onChange={e=>setEditingLab({...editingLab,category:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={editingLab.difficulty} onChange={e=>setEditingLab({...editingLab,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={editingLab.duration} onChange={e=>setEditingLab({...editingLab,duration:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[90px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Objectives</label><Input type="number" min={1} value={editingLab.objectives ?? 1} onChange={e=>setEditingLab({...editingLab,objectives:Math.max(1,parseInt(e.target.value)||1)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[70px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={editingLab.youtubeId||""} onChange={e=>setEditingLab({...editingLab,youtubeId:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">New flag (optional)</label><Input placeholder="leave empty to keep" onChange={e=>setEditingLab({...editingLab,flag:e.target.value} as AdminLab)} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /></div>
                     <div className="w-full"><label className="text-[11px] font-semibold">Description</label><Input value={editingLab.description||""} onChange={e=>setEditingLab({...editingLab,description:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full mt-1" /></div>
                     <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                       if(!requireAdmin()) return
                       if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                       const clean = { ...editingLab, title: sanitizeInput(editingLab.title,120), duration: sanitizeInput(editingLab.duration,20), description: sanitizeInput(editingLab.description||"",2000), youtubeId: sanitizeInput(editingLab.youtubeId||"",20) }
+                      const patch: Record<string, unknown> = { title: clean.title, category: clean.category, difficulty: clean.difficulty, duration: clean.duration, description: clean.description, objectives: clean.objectives, youtubeId: clean.youtubeId }
+                      const flagVal = (editingLab as AdminLab & { flag?: string }).flag
+                      if (flagVal && flagVal.trim()) patch.flag = flagVal.trim()
                       try {
-                        await adminApi("labs", "PATCH", clean.id, { title: clean.title, duration: clean.duration, description: clean.description, youtubeId: clean.youtubeId })
-                        setAdminLabs(adminLabs.map(x=>x.id===clean.id? clean as AdminLab: x)); setEditingLab(null)
+                        await adminApi("labs", "PATCH", clean.id, patch)
+                        setAdminLabs(adminLabs.map(x=>x.id===clean.id? {...clean, hasFlag: clean.hasFlag || !!(flagVal && flagVal.trim())} : x)); setEditingLab(null)
                       } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                     }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                     <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingLab(null)}><X className="w-3.5 h-3.5" /></Button>
@@ -813,13 +898,14 @@ export default function AdminPage() {
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Category</label><select value={newChallenge.category} onChange={e=>setNewChallenge({...newChallenge,category:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Web</option><option>Crypto</option><option>Pwn</option><option>Reverse</option><option>Forensics</option><option>OSINT</option><option>Cloud</option><option>Blue Team</option><option>Misc</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={newChallenge.difficulty} onChange={e=>setNewChallenge({...newChallenge,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Easy</option><option>Medium</option><option>Hard</option><option>Insane</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Points</label><Input type="number" min={0} value={newChallenge.points ?? 100} onChange={e=>setNewChallenge({...newChallenge,points:Math.max(0,parseInt(e.target.value)||0)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Tags (comma separated)</label><Input value={(newChallenge.tags||[]).join(", ")} onChange={e=>setNewChallenge({...newChallenge,tags:e.target.value.split(",").map(t=>t.trim()).filter(Boolean)})} placeholder="web, jwt" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Flag (stored hashed)</label><Input value={newChallenge.flag||""} onChange={e=>setNewChallenge({...newChallenge,flag:e.target.value})} placeholder="flag{...}" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /></div>
                     <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                       if(!requireAdmin()) return
                       if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                       if(!newChallenge.name) return alert("Name required")
                       try {
-                        const data = await adminApi("challenges", "POST", undefined, { name: sanitizeInput(newChallenge.name,200), category: newChallenge.category||"Web", difficulty: (["Easy","Medium","Hard","Insane"].includes(newChallenge.difficulty as string) ? newChallenge.difficulty : "Easy"), points: newChallenge.points ?? 100, flag: (newChallenge.flag||"").trim() || undefined })
+                        const data = await adminApi("challenges", "POST", undefined, { name: sanitizeInput(newChallenge.name,200), category: newChallenge.category||"Web", difficulty: (["Easy","Medium","Hard","Insane"].includes(newChallenge.difficulty as string) ? newChallenge.difficulty : "Easy"), points: newChallenge.points ?? 100, tags: newChallenge.tags ?? [], flag: (newChallenge.flag||"").trim() || undefined })
                         setAdminChallenges([...adminChallenges, data.item as unknown as AdminChallenge])
                         setShowAddChallenge(false); setNewChallenge({name:"", category:"Web", difficulty:"Easy", points:100, flag:""})
                       } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
@@ -830,13 +916,17 @@ export default function AdminPage() {
                 {editingChallenge && (
                   <div className="p-4 border-t bg-blue-50 dark:bg-blue-950/20 flex flex-wrap gap-2 items-end">
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Name</label><Input value={editingChallenge.name} onChange={e=>setEditingChallenge({...editingChallenge,name:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Category</label><select value={editingChallenge.category} onChange={e=>setEditingChallenge({...editingChallenge,category:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Web</option><option>Crypto</option><option>Pwn</option><option>Reverse</option><option>Forensics</option><option>OSINT</option><option>Cloud</option><option>Blue Team</option><option>Misc</option></select></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={editingChallenge.difficulty} onChange={e=>setEditingChallenge({...editingChallenge,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Easy</option><option>Medium</option><option>Hard</option><option>Insane</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Points</label><Input type="number" min={0} value={editingChallenge.points} onChange={e=>setEditingChallenge({...editingChallenge,points:Math.max(0,parseInt(e.target.value)||0)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Solves</label><Input type="number" min={0} value={editingChallenge.solves} onChange={e=>setEditingChallenge({...editingChallenge,solves:Math.max(0,parseInt(e.target.value)||0)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Tags (comma separated)</label><Input value={(editingChallenge.tags||[]).join(", ")} onChange={e=>setEditingChallenge({...editingChallenge,tags:e.target.value.split(",").map(t=>t.trim()).filter(Boolean)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">New flag (optional)</label><Input placeholder="leave empty to keep" onChange={e=>setEditingChallenge({...editingChallenge,flag:e.target.value} as AdminChallenge)} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /></div>
                     <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                       if(!requireAdmin()) return
                       if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                       const clean = { ...editingChallenge, name: sanitizeInput(editingChallenge.name,200) }
-                      const patch: Record<string, unknown> = { name: clean.name, points: clean.points }
+                      const patch: Record<string, unknown> = { name: clean.name, category: clean.category, difficulty: clean.difficulty, points: clean.points, solves: clean.solves, tags: clean.tags }
                       const flagVal = (editingChallenge as AdminChallenge & { flag?: string }).flag
                       if (flagVal && flagVal.trim()) patch.flag = flagVal.trim()
                       try {
@@ -867,12 +957,31 @@ export default function AdminPage() {
                   arr.push(msg)
                   threads.set(msg.user_id, arr)
                 }
-                const list = [...threads.entries()].sort((a, b) => {
-                  const ta = a[1][a[1].length - 1]?.created_at ?? ""
-                  const tb = b[1][b[1].length - 1]?.created_at ?? ""
-                  return tb.localeCompare(ta)
-                })
-                const current = inboxUser ? (threads.get(inboxUser) ?? []) : []
+                // API returns newest-first; display threads newest-first, messages oldest-first
+                const list = [...threads.entries()]
+                  .map(([uid, msgs]) => [uid, [...msgs].reverse()] as const)
+                  .sort((a, b) => {
+                    const ta = a[1][a[1].length - 1]?.created_at ?? ""
+                    const tb = b[1][b[1].length - 1]?.created_at ?? ""
+                    return tb.localeCompare(ta)
+                  })
+                const current = inboxUser ? (threads.get(inboxUser) ?? []).slice().reverse() : []
+                const openThread = async (uid: string) => {
+                  setInboxUser(uid)
+                  const unread = (threads.get(uid) ?? []).filter(x => x.from_role === "user" && !x.read)
+                  if (unread.length === 0) return
+                  try {
+                    await Promise.all(unread.map(m => adminApi("messages", "PATCH", m.id, { read: true })))
+                    setInbox(prev => prev.map(x => x.user_id === uid && x.from_role === "user" ? { ...x, read: true } : x))
+                  } catch {}
+                }
+                const deleteMsg = async (mid: string) => {
+                  if (!confirm("Delete this message?")) return
+                  try {
+                    await adminApi("messages", "DELETE", mid)
+                    setInbox(prev => prev.filter(x => x.id !== mid))
+                  } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                }
                 const reply = async () => {
                   if (!inboxUser) return
                   if(!requireAdmin()) return
@@ -895,7 +1004,7 @@ export default function AdminPage() {
                         const last = msgs[msgs.length - 1]
                         const unread = msgs.filter(x => x.from_role === "user" && !x.read).length
                         return (
-                          <button key={uid} onClick={()=>setInboxUser(uid)} className={`w-full text-left p-3 hover:bg-[var(--surface-2)] ${inboxUser===uid ? "bg-[var(--surface-2)]" : ""}`}>
+                          <button key={uid} onClick={()=>openThread(uid)} className={`w-full text-left p-3 hover:bg-[var(--surface-2)] ${inboxUser===uid ? "bg-[var(--surface-2)]" : ""}`}>
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[13px] font-[600] truncate">{msgs[0]?.userName || msgs[0]?.userEmail || uid.slice(0,8)}</span>
                               {unread > 0 && <Badge className="text-[10px] bg-red-600 text-white border-red-600">{unread}</Badge>}
@@ -913,7 +1022,10 @@ export default function AdminPage() {
                         <>
                           <div className="flex-1 p-4 space-y-2 overflow-auto max-h-[360px] bg-[var(--surface-2)]">
                             {current.map(msg => (
-                              <div key={msg.id} className={`${msg.from_role === "admin" ? "ml-auto bg-[var(--text)] text-[var(--background)]" : "bg-[var(--surface)] border border-[var(--border)]"} max-w-[80%] p-2.5 rounded-[10px] text-[12.5px]`}>{msg.text}</div>
+                              <div key={msg.id} className="group flex items-start gap-1.5">
+                                <div className={`${msg.from_role === "admin" ? "ml-auto bg-[var(--text)] text-[var(--background)]" : "bg-[var(--surface)] border border-[var(--border)]"} max-w-[80%] p-2.5 rounded-[10px] text-[12.5px]`}>{msg.text}</div>
+                                <button onClick={()=>deleteMsg(msg.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-red-600 shrink-0 mt-1" aria-label="Delete message"><X className="w-3 h-3" /></button>
+                              </div>
                             ))}
                           </div>
                           <div className="p-3 border-t border-[var(--border)] flex gap-2">
@@ -1001,6 +1113,7 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">CVE ID</label><Input value={newCVE.cveId} onChange={e=>setNewCVE({...newCVE,cveId:e.target.value})} placeholder="CVE-2026-0000" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={newCVE.title} onChange={e=>setNewCVE({...newCVE,title:e.target.value})} placeholder="CVE title" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Severity</label><select value={newCVE.severity} onChange={e=>setNewCVE({...newCVE,severity:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1"><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={newCVE.status} onChange={e=>setNewCVE({...newCVE,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1"><option>Draft</option><option>Published</option></select></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
@@ -1009,7 +1122,7 @@ export default function AdminPage() {
                     const cleanId = sanitizeInput(newCVE.cveId, 20).toUpperCase()
                     if(!cveIdPat.test(cleanId)) return alert("Invalid CVE ID format (CVE-YYYY-XXXX)")
                     try {
-                      const data = await adminApi("cves", "POST", undefined, { cveId: cleanId, title: sanitizeInput(newCVE.title,200), severity: (["Critical","High","Medium","Low"].includes(newCVE.severity as string) ? newCVE.severity : "High") })
+                      const data = await adminApi("cves", "POST", undefined, { cveId: cleanId, title: sanitizeInput(newCVE.title,200), severity: (["Critical","High","Medium","Low"].includes(newCVE.severity as string) ? newCVE.severity : "High"), status: newCVE.status === "Published" ? "Published" : "Draft" })
                       setCves([...cves, data.item as unknown as AdminCVE])
                       setShowAddCVE(false); setNewCVE({cveId:"",title:"",severity:"High",status:"Draft"})
                     } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
@@ -1023,12 +1136,13 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingCVE.title} onChange={e=>setEditingCVE({...editingCVE,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Severity</label><select value={editingCVE.severity} onChange={e=>setEditingCVE({...editingCVE,severity:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingCVE.status} onChange={e=>setEditingCVE({...editingCVE,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Published</option><option>Draft</option></select></div>
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Publish date</label><Input value={editingCVE.publishDate||""} onChange={e=>setEditingCVE({...editingCVE,publishDate:e.target.value})} placeholder="2026-01-31" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
                   <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
-                    const clean: AdminCVE = { ...editingCVE, cveId: sanitizeInput(editingCVE.cveId,20).toUpperCase(), title: sanitizeInput(editingCVE.title,200) }
+                    const clean: AdminCVE = { ...editingCVE, cveId: sanitizeInput(editingCVE.cveId,20).toUpperCase(), title: sanitizeInput(editingCVE.title,200), publishDate: sanitizeInput(editingCVE.publishDate||"",20) }
                     try {
-                      await adminApi("cves", "PATCH", clean.id, { cveId: clean.cveId, title: clean.title, severity: clean.severity, status: clean.status })
+                      await adminApi("cves", "PATCH", clean.id, { cveId: clean.cveId, title: clean.title, severity: clean.severity, status: clean.status, publishDate: clean.publishDate })
                       setCves(cves.map(c=>c.id===clean.id? clean: c)); setEditingCVE(null)
                     } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>

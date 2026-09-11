@@ -5,7 +5,7 @@ import { randomUUID } from "crypto"
 
 export const runtime = "nodejs"
 
-const TABLES = ["users", "videos", "events", "news", "cves", "labs", "challenges", "settings", "messages"] as const
+const TABLES = ["users", "videos", "events", "news", "cves", "labs", "challenges", "settings", "messages", "entitlements"] as const
 type Table = (typeof TABLES)[number]
 
 function isTable(t: string): t is Table {
@@ -177,6 +177,33 @@ async function toRow(table: Table, body: Record<string, unknown>, isCreate: bool
       if (!text) throw new Error("Message text required")
       return { user_id: userId, from_role: "admin", text, read: false }
     }
+    case "entitlements": {
+      const resourceTypes = ["lab", "lesson", "video", "challenge"] as const
+      const userId = str(body.user_id ?? body.userId, 80)
+      const resourceType = str(body.resource_type ?? body.resourceType, 20)
+      const resourceId = str(body.resource_id ?? body.resourceId, 200)
+      if (isCreate) {
+        if (!userId) throw new Error("user_id required")
+        if (!(resourceTypes as readonly string[]).includes(resourceType)) {
+          throw new Error("Invalid resource_type (lab, lesson, video, challenge)")
+        }
+        if (!resourceId) throw new Error("resource_id required")
+        const grantedBy = str(body.granted_by ?? body.grantedBy, 64) || "admin"
+        return { user_id: userId, resource_type: resourceType, resource_id: resourceId, granted_by: grantedBy }
+      }
+      const row: Record<string, unknown> = {}
+      if (userId) row.user_id = userId
+      if (resourceType) {
+        if (!(resourceTypes as readonly string[]).includes(resourceType)) {
+          throw new Error("Invalid resource_type (lab, lesson, video, challenge)")
+        }
+        row.resource_type = resourceType
+      }
+      if (resourceId) row.resource_id = resourceId
+      const grantedBy = str(body.granted_by ?? body.grantedBy, 64)
+      if (grantedBy) row.granted_by = grantedBy
+      return row
+    }
   }
 }
 
@@ -185,7 +212,7 @@ function fromRow(table: Table, row: Record<string, unknown>): Record<string, unk
   const s = (v: unknown) => (v === null || v === undefined ? "" : String(v))
   switch (table) {
     case "users":
-      return { id: s(row.id), username: s(row.name), email: s(row.email), reputation: num(row.reputation), status: s(row.status) || "Active", role: s(row.role) || "user" }
+      return { id: s(row.id), username: s(row.name), email: s(row.email), reputation: num(row.reputation), status: s(row.status) || "Active", role: s(row.role) || "user", plan: s(row.plan) || "free" }
     case "videos":
       return { id: s(row.id), title: s(row.title), subtitle: s(row.subtitle), duration: s(row.duration) || "00:00", module: s(row.module) || "General", category: s(row.category), path: s(row.path) || "general", youtubeId: s(row.youtube_id), description: s(row.description), featured: !!row.featured }
     case "events":
@@ -213,6 +240,19 @@ function fromRow(table: Table, row: Record<string, unknown>): Record<string, unk
         created_at: s(row.created_at),
       }
     }
+    case "entitlements": {
+      const u = (row.users as Record<string, unknown> | null) ?? null
+      return {
+        id: s(row.id),
+        user_id: s(row.user_id),
+        userEmail: u ? s(u.email) : "",
+        userName: u ? s(u.name) : "",
+        resource_type: s(row.resource_type),
+        resource_id: s(row.resource_id),
+        granted_by: s(row.granted_by) || "admin",
+        created_at: s(row.created_at),
+      }
+    }
   }
 }
 
@@ -226,6 +266,7 @@ const ORDER_COLUMN: Record<Table, string> = {
   challenges: "created_at",
   settings: "key",
   messages: "created_at",
+  entitlements: "created_at",
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ table: string }> }) {
@@ -238,7 +279,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tabl
     ? "id,email,name,plan,provider,role,reputation,status,created_at"
     : table === "messages"
       ? "id,user_id,from_role,text,read,created_at,users(email,name)"
-      : "*"
+      : table === "entitlements"
+        ? "id,user_id,resource_type,resource_id,granted_by,created_at,users(email,name)"
+        : "*"
   const { data, error } = await supabase.from(table).select(select).order(ORDER_COLUMN[table], { ascending: false }).limit(200)
   if (error) return Response.json({ error: "Failed to load" }, { status: 500 })
   const rows = (data ?? []) as unknown as Record<string, unknown>[]

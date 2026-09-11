@@ -21,11 +21,12 @@ export function isValidYoutubeId(id: string): boolean {
 }
 
 /**
- * Privacy-enhanced embed URL.
+ * Privacy-enhanced embed URL. Returns "" for invalid IDs so callers
+ * can fall back to an empty state instead of iframing a broken URL.
  */
 export function getYoutubeEmbedUrl(videoId: string): string {
-  // Validate but still produce URL – caller can decide to reject
-  return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`
+  if (!isValidYoutubeId((videoId || "").trim())) return ""
+  return `https://www.youtube-nocookie.com/embed/${videoId.trim()}?rel=0&modestbranding=1`
 }
 
 /**
@@ -36,7 +37,8 @@ export function getYoutubeThumbnail(
   videoId: string,
   quality: "default" | "mqdefault" | "hqdefault" | "sddefault" | "maxresdefault" = "hqdefault"
 ): string {
-  return `https://img.youtube.com/vi/${videoId}/${quality}.jpg`
+  if (!isValidYoutubeId((videoId || "").trim())) return ""
+  return `https://img.youtube.com/vi/${videoId.trim()}/${quality}.jpg`
 }
 
 /**
