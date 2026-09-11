@@ -1,11 +1,24 @@
-import { createHash, createHmac, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from "crypto"
+import { createHash, createHmac, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual, type ScryptOptions } from "crypto"
 import { promisify } from "util"
 import { getServiceSupabase as getSupabase } from "@/lib/supabase"
 import { env } from "@/lib/env"
 
-const scrypt = promisify(scryptCb) as (password: string, salt: string, keylen: number) => Promise<Buffer>
+const scrypt = promisify(scryptCb) as (
+  password: string,
+  salt: string,
+  keylen: number,
+  options?: ScryptOptions
+) => Promise<Buffer>
 
 const SCRYPT_KEYLEN = 64
+// v2 parameters (OWASP-recommended cost 2^15). Hashes created before this
+// hardening used Node's defaults (N=16384) and keep verifying through the
+// legacy branch of verifyPassword; new hashes embed their parameters so a
+// future cost upgrade never breaks existing hashes.
+const SCRYPT_N = 1 << 15
+const SCRYPT_R = 8
+const SCRYPT_P = 1
+const SCRYPT_MAXMEM = 64 * 1024 * 1024
 const SESSION_TTL_DAYS = 30
 
 export type SessionUser = {
@@ -24,15 +37,39 @@ function sha256(value: string): string {
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex")
-  const derived = await scrypt(password, salt, SCRYPT_KEYLEN)
-  return `scrypt$${salt}$${derived.toString("hex")}`
+  const derived = await scrypt(password, salt, SCRYPT_KEYLEN, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+    maxmem: SCRYPT_MAXMEM,
+  })
+  // scrypt2$N$r$p$salt$hash — self-describing format (v1 was scrypt$salt$hash)
+  return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt}$${derived.toString("hex")}`
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   try {
-    const [algo, salt, hashHex] = stored.split("$")
-    if (algo !== "scrypt" || !salt || !hashHex) return false
-    const derived = await scrypt(password, salt, SCRYPT_KEYLEN)
+    const parts = stored.split("$")
+    let N = 16384 // v1 hashes used Node's default parameters
+    let r = 8
+    let p = 1
+    let salt: string
+    let hashHex: string
+    if (parts[0] === "scrypt2" && parts.length === 6) {
+      N = parseInt(parts[1], 10)
+      r = parseInt(parts[2], 10)
+      p = parseInt(parts[3], 10)
+      salt = parts[4]
+      hashHex = parts[5]
+      if (!Number.isFinite(N) || !Number.isFinite(r) || !Number.isFinite(p) || N <= 0 || r <= 0 || p <= 0) return false
+    } else if (parts[0] === "scrypt" && parts.length === 3) {
+      salt = parts[1]
+      hashHex = parts[2]
+    } else {
+      return false
+    }
+    if (!salt || !hashHex) return false
+    const derived = await scrypt(password, salt, SCRYPT_KEYLEN, { N, r, p, maxmem: SCRYPT_MAXMEM })
     const expected = Buffer.from(hashHex, "hex")
     return expected.length === derived.length && timingSafeEqual(expected, derived)
   } catch {
@@ -98,9 +135,24 @@ export async function createUser(input: {
   return rowToSessionUser(data as Record<string, unknown>)
 }
 
+// Dummy hash used when the email does not exist — running the same scrypt
+// work as a real check keeps login timing flat so attackers cannot enumerate
+// which emails have accounts by measuring response times.
+let dummyHashPromise: Promise<string> | null = null
+function getDummyHash(): Promise<string> {
+  if (!dummyHashPromise) {
+    dummyHashPromise = hashPassword(`dummy-${randomBytes(16).toString("hex")}`)
+  }
+  return dummyHashPromise
+}
+
 export async function authenticateUser(email: string, password: string): Promise<SessionUser | null> {
   const user = await getUserByEmail(email)
-  if (!user || typeof user.password_hash !== "string") return null
+  if (!user || typeof user.password_hash !== "string" || !user.password_hash) {
+    const dummy = await getDummyHash()
+    await verifyPassword(password, dummy) // equal work, result discarded
+    return null
+  }
   const ok = await verifyPassword(password, user.password_hash)
   if (!ok) return null
   if (user.status === "Banned") return null
@@ -137,7 +189,7 @@ export async function getUserBySession(token: string | null | undefined): Promis
   const tokenHash = sha256(token)
   const { data, error } = await supabase
     .from("sessions")
-    .select("user_id, expires_at")
+    .select("id, user_id, expires_at, last_seen_at")
     .eq("token_hash", tokenHash)
     .limit(1)
   if (error || !data || data.length === 0) return null
@@ -146,6 +198,21 @@ export async function getUserBySession(token: string | null | undefined): Promis
     await supabase.from("sessions").delete().eq("token_hash", tokenHash)
     return null
   }
+
+  // Sliding expiration: extend the session when it was last seen > 1h ago.
+  // Also opportunistically clean up this user's expired sessions.
+  try {
+    const lastSeen = new Date(row.last_seen_at).getTime()
+    const oneHour = 3600 * 1000
+    if (Number.isFinite(lastSeen) && Date.now() - lastSeen > oneHour) {
+      const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 3600 * 1000).toISOString()
+      await supabase.from("sessions").update({ last_seen_at: new Date().toISOString(), expires_at: expiresAt }).eq("id", row.id)
+      await supabase.from("sessions").delete().eq("user_id", row.user_id).lt("expires_at", new Date().toISOString())
+    }
+  } catch {
+    /* sliding refresh is best-effort — never block auth on it */
+  }
+
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("*")
@@ -157,10 +224,19 @@ export async function getUserBySession(token: string | null | undefined): Promis
   return rowToSessionUser(user)
 }
 
+function safeDecodeCookieValue(raw: string): string {
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    // malformed %-sequences (e.g. %ZZ) must not 500 the whole route
+    return raw
+  }
+}
+
 export function getSessionToken(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie") ?? ""
   const match = cookieHeader.match(/(?:^|;\s*)aegis_session=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+  return match ? safeDecodeCookieValue(match[1]) : null
 }
 
 export function buildSetCookie(token: string): string {
@@ -168,7 +244,9 @@ export function buildSetCookie(token: string): string {
 }
 
 export function buildClearCookie(): string {
-  return `aegis_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`
+  const parts = ["aegis_session=", "Path=/", "HttpOnly", "SameSite=Strict", "Max-Age=0"]
+  if (env.IS_PRODUCTION) parts.push("Secure")
+  return parts.join("; ")
 }
 
 export function rowToSessionUser(row: Record<string, unknown>): SessionUser {
@@ -184,7 +262,38 @@ export function rowToSessionUser(row: Record<string, unknown>): SessionUser {
 }
 
 // ---------------------------------------------------------------------------
+// Password policy — shared by signup (and future password reset)
+// ---------------------------------------------------------------------------
+
+const COMMON_PASSWORDS = new Set([
+  "password", "password1", "password123", "passw0rd", "p@ssw0rd",
+  "12345678", "123456789", "1234567890", "qwerty123", "qwertyuiop",
+  "letmein", "letmein123", "iloveyou", "admin123", "admin1234",
+  "welcome1", "welcome123", "abc12345", "test1234", "testtest",
+  "hackerman", "hackme123", "aegis123", "cybersecurity",
+])
+
+export function validatePasswordPolicy(password: string): { ok: boolean; error?: string } {
+  if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters" }
+  if (password.length > 128) return { ok: false, error: "Password must be at most 128 characters" }
+  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return { ok: false, error: "Password must contain both letters and numbers" }
+  }
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    return { ok: false, error: "This password is too common — choose something stronger" }
+  }
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
 // Admin session (signed httpOnly cookie, no DB row needed)
+//
+// SIGNING SECRET: pass NEXTAUTH_SECRET (never ADMIN_PASS). The signing key
+// must be safe to expose to an HMAC oracle — the admin password is not,
+// because a leaked/brute-forced token would then reveal it. Callers keep
+// ADMIN_PASS strictly for the login comparison. (See /api/admin/login,
+// src/lib/admin-api.ts and middleware.ts for the shared fallback chain:
+// NEXTAUTH_SECRET || ADMIN_PASS.)
 // ---------------------------------------------------------------------------
 
 const ADMIN_TTL_MS = 3600 * 1000
@@ -227,7 +336,7 @@ export function verifyAdminToken(token: string | null | undefined, secret: strin
 export function getAdminSessionToken(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie") ?? ""
   const match = cookieHeader.match(/(?:^|;\s*)aegis_admin_session=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+  return match ? safeDecodeCookieValue(match[1]) : null
 }
 
 export function buildAdminSetCookie(token: string): string {
@@ -235,5 +344,7 @@ export function buildAdminSetCookie(token: string): string {
 }
 
 export function buildAdminClearCookie(): string {
-  return `aegis_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`
+  const parts = ["aegis_admin_session=", "Path=/", "HttpOnly", "SameSite=Strict", "Max-Age=0"]
+  if (env.IS_PRODUCTION) parts.push("Secure")
+  return parts.join("; ")
 }

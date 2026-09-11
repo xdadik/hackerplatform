@@ -1,13 +1,21 @@
-import { randomUUID } from "crypto"
+import { getServiceSupabase } from "@/lib/supabase"
+import { getSessionToken, getUserBySession, type SessionUser } from "@/lib/auth-server"
+import { rateLimitCheck, rateLimitRecord } from "@/lib/rate-limit-server"
 
 export const dynamic = "force-dynamic"
 
-// In-memory fallback store. In production with Supabase, this would query that instead.
-// Keyed by userId (from cookie aegis_uid) -> progress records.
+// Progress is persisted in the Supabase `progress` table, keyed by the real
+// authenticated user (httpOnly aegis_session cookie -> sessions row -> user).
+// The service-role client is used because RLS policies rely on Supabase
+// auth.uid(), which is null for our custom session tokens — user identity is
+// resolved server-side before any query.
 
-type ProgressRecord = {
-  id: string
-  userId: string
+const PROGRESS_MAX = 30 // writes per minute per user
+const PROGRESS_WINDOW = 60_000
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+type ProgressPayload = {
   labId?: string | null
   challengeId?: string | null
   pathId?: string | null
@@ -16,78 +24,80 @@ type ProgressRecord = {
   updatedAt: string
 }
 
-const progressStore = new Map<string, ProgressRecord[]>() // userId -> records
-
-function getUserId(request: Request): string | null {
-  const cookie = request.headers.get("cookie") ?? ""
-  const match = cookie.match(/(?:^|;\s*)aegis_uid=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+async function requireUser(request: Request): Promise<SessionUser | null> {
+  const token = getSessionToken(request)
+  if (!token) return null
+  return getUserBySession(token)
 }
 
-function buildSetCookieHeader(userId: string): string {
-  // 1 year, lax, httpOnly not set here because Next Response cookies are easier via header, but we set basics
-  return `aegis_uid=${encodeURIComponent(userId)}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax`
+function sanitizeBody(b: Record<string, unknown>): ProgressPayload | null {
+  const labId = typeof b.labId === "string" && b.labId.trim() ? b.labId.trim() : null
+  const challengeId = typeof b.challengeId === "string" && b.challengeId.trim() ? b.challengeId.trim() : null
+  const pathId = typeof b.pathId === "string" && b.pathId.trim() ? b.pathId.trim() : null
+  if (!labId && !challengeId && !pathId) return null
+
+  const statusRaw = typeof b.status === "string" ? b.status : "in_progress"
+  const allowedStatus = new Set(["not_started", "in_progress", "completed"])
+  const status = (allowedStatus.has(statusRaw) ? statusRaw : "in_progress") as ProgressPayload["status"]
+
+  const progressRaw =
+    typeof b.progress === "number" ? b.progress : typeof b.progress === "string" ? parseInt(b.progress, 10) : 0
+  const progress = Math.min(100, Math.max(0, Number.isNaN(progressRaw) ? 0 : progressRaw))
+
+  return { labId, challengeId, pathId, status, progress, updatedAt: new Date().toISOString() }
 }
 
 export async function GET(request: Request) {
-  const existingUid = getUserId(request)
-  let userId = existingUid
-  const headers: Record<string, string> = {
-    "Cache-Control": "no-store, must-revalidate",
+  const headers: Record<string, string> = { "Cache-Control": "no-store, must-revalidate" }
+
+  const user = await requireUser(request)
+  if (!user) {
+    return Response.json({ error: "Login required to track progress" }, { status: 401, headers })
   }
 
-  // If no cookie, create one and return empty progress (first visit)
-  if (!userId) {
-    userId = `anon_${randomUUID()}`
-    headers["Set-Cookie"] = buildSetCookieHeader(userId)
-    return Response.json({ userId, progress: [] as ProgressRecord[], source: "mock" as const }, { headers })
+  const supabase = getServiceSupabase()
+  if (!supabase) {
+    return Response.json({ error: "Database is not configured" }, { status: 503, headers })
   }
 
-  // Try Supabase if configured (non-blocking fallback)
-  // We intentionally do not import getSupabase here at top to keep this route lightweight;
-  // but we can attempt dynamic check without crashing if env missing.
-  try {
-    // Lazy import to avoid crashing when Supabase env absent at build time
-    const { getSupabase } = await import("@/lib/supabase")
-    const supabase = getSupabase()
-    if (supabase) {
-      const { data, error } = await supabase
-        .from("progress")
-        .select("*")
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false })
+  const { data, error } = await supabase
+    .from("progress")
+    .select("id,lab_id,challenge_id,status,progress,updated_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
 
-      if (!error && data) {
-        return Response.json(
-          {
-            userId,
-            progress: data,
-            source: "supabase" as const,
-          },
-          { headers }
-        )
-      }
-    }
-  } catch {
-    // ignore and fall back
+  if (error) {
+    console.error("[api/progress] read failed:", error.message)
+    return Response.json({ error: "Failed to load progress" }, { status: 500, headers })
   }
 
-  const records = progressStore.get(userId) ?? []
-  return Response.json({ userId, progress: records, source: "mock" as const }, { headers })
+  return Response.json({ userId: user.id, progress: data ?? [], source: "supabase" }, { headers })
 }
 
 export async function POST(request: Request) {
-  let userId = getUserId(request)
-  const headers: Record<string, string> = {
-    "Cache-Control": "no-store",
-  }
-  let setCookieHeader: string | null = null
+  const headers: Record<string, string> = { "Cache-Control": "no-store" }
 
-  if (!userId) {
-    userId = `anon_${randomUUID()}`
-    setCookieHeader = buildSetCookieHeader(userId)
-    headers["Set-Cookie"] = setCookieHeader
+  const user = await requireUser(request)
+  if (!user) {
+    return Response.json({ error: "Login required to track progress" }, { status: 401, headers })
   }
+
+  const supabase = getServiceSupabase()
+  if (!supabase) {
+    return Response.json({ error: "Database is not configured" }, { status: 503, headers })
+  }
+
+  // This route is an unthrottled authenticated write endpoint otherwise —
+  // 30 writes/min per user is generous for real UIs and hostile to scripts.
+  const bucket = `progress:${user.id}`
+  const rl = await rateLimitCheck(bucket, PROGRESS_MAX, PROGRESS_WINDOW)
+  if (rl.limited) {
+    return Response.json(
+      { error: "Too many progress updates. Try again shortly." },
+      { status: 429, headers: { ...headers, "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
+  }
+  await rateLimitRecord(bucket, PROGRESS_MAX, PROGRESS_WINDOW)
 
   let body: unknown
   try {
@@ -96,69 +106,85 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400, headers })
   }
 
-  const b = body as Record<string, unknown>
-  const labId = typeof b.labId === "string" ? b.labId : null
-  const challengeId = typeof b.challengeId === "string" ? b.challengeId : null
-  const pathId = typeof b.pathId === "string" ? b.pathId : null
-  const statusRaw = typeof b.status === "string" ? b.status : "in_progress"
-  const progressRaw = typeof b.progress === "number" ? b.progress : typeof b.progress === "string" ? parseInt(b.progress, 10) : 0
-
-  const allowedStatus = new Set(["not_started", "in_progress", "completed"])
-  const status = allowedStatus.has(statusRaw) ? (statusRaw as ProgressRecord["status"]) : "in_progress"
-  const progress = Math.min(100, Math.max(0, isNaN(progressRaw) ? 0 : progressRaw))
-
-  if (!labId && !challengeId && !pathId) {
-    return Response.json({ error: "At least one of labId, challengeId, pathId is required" }, { status: 400, headers })
+  const clean = sanitizeBody((body ?? {}) as Record<string, unknown>)
+  if (!clean) {
+    return Response.json(
+      { error: "At least one of labId, challengeId, pathId is required" },
+      { status: 400, headers }
+    )
   }
 
-  const record: ProgressRecord = {
-    id: randomUUID(),
-    userId: userId!,
-    labId,
-    challengeId,
-    pathId,
-    status,
-    progress,
-    updatedAt: new Date().toISOString(),
+  // Reject non-UUID ids with a clean 400 instead of an opaque DB 500.
+  if (clean.labId && !UUID_RE.test(clean.labId)) {
+    return Response.json({ error: "labId must be a UUID" }, { status: 400, headers })
+  }
+  if (clean.challengeId && !UUID_RE.test(clean.challengeId)) {
+    return Response.json({ error: "challengeId must be a UUID" }, { status: 400, headers })
   }
 
-  // Try Supabase upsert if available
+  const payload = {
+    user_id: user.id,
+    lab_id: clean.labId,
+    challenge_id: clean.challengeId,
+    status: clean.status,
+    progress: clean.progress,
+    updated_at: clean.updatedAt,
+  }
+
+  // Upsert by (user, item) via select-then-write. The progress table has no
+  // ON CONFLICT target covering NULL lab/challenge ids, so we select first,
+  // and if the 0003 unique index turns a concurrent insert into a duplicate
+  // error we retry once as an update.
+  const buildSelect = () => {
+    let q = supabase.from("progress").select("id").eq("user_id", user.id as string)
+    if (clean.labId) q = q.eq("lab_id", clean.labId)
+    else q = q.is("lab_id", null)
+    if (clean.challengeId) q = q.eq("challenge_id", clean.challengeId)
+    else q = q.is("challenge_id", null)
+    return q
+  }
+
   try {
-    const { getSupabase } = await import("@/lib/supabase")
-    const supabase = getSupabase()
-    if (supabase) {
-      const payload: Record<string, unknown> = {
-        user_id: userId,
-        lab_id: labId,
-        challenge_id: challengeId,
-        status,
-        progress,
-        updated_at: record.updatedAt,
-      }
-      const { error } = await supabase.from("progress").upsert(payload as never)
-      if (!error) {
-        return Response.json({ ok: true, progress: record, source: "supabase" as const }, { headers })
-      }
-      console.warn("[api/progress] Supabase upsert failed, using mock:", error.message)
+    const { data: existing, error: selectErr } = await buildSelect().limit(1)
+
+    if (selectErr) throw new Error(selectErr.message)
+
+    if (existing && existing.length > 0) {
+      const { data: updated, error: updateErr } = await supabase
+        .from("progress")
+        .update({ status: clean.status, progress: clean.progress, updated_at: clean.updatedAt })
+        .eq("id", existing[0].id as string)
+        .select("id,lab_id,challenge_id,status,progress,updated_at")
+        .single()
+      if (updateErr) throw new Error(updateErr.message)
+      return Response.json({ ok: true, progress: updated, source: "supabase" }, { headers })
     }
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("progress")
+      .insert(payload)
+      .select("id,lab_id,challenge_id,status,progress,updated_at")
+      .single()
+
+    if (insertErr && /duplicate|unique/i.test(insertErr.message)) {
+      // Raced a concurrent write — the row now exists, so update it.
+      const { data: raced } = await buildSelect().limit(1)
+      const racedId = raced && raced.length > 0 ? (raced[0].id as string) : null
+      if (racedId) {
+        const { data: updated, error: updateErr } = await supabase
+          .from("progress")
+          .update({ status: clean.status, progress: clean.progress, updated_at: clean.updatedAt })
+          .eq("id", racedId)
+          .select("id,lab_id,challenge_id,status,progress,updated_at")
+          .single()
+        if (updateErr) throw new Error(updateErr.message)
+        return Response.json({ ok: true, progress: updated, source: "supabase" }, { headers })
+      }
+    }
+    if (insertErr) throw new Error(insertErr.message)
+    return Response.json({ ok: true, progress: inserted, source: "supabase" }, { headers })
   } catch (err) {
-    console.warn("[api/progress] Supabase not available, using mock:", err)
+    console.error("[api/progress] write failed:", err)
+    return Response.json({ error: "Failed to save progress" }, { status: 500, headers })
   }
-
-  // Mock fallback: store in-memory
-  const list = progressStore.get(userId!) ?? []
-  // Upsert by labId/challengeId/pathId match
-  const idx = list.findIndex(
-    (r) => r.labId === labId && r.challengeId === challengeId && r.pathId === pathId
-  )
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], status, progress, updatedAt: record.updatedAt }
-  } else {
-    list.push(record)
-  }
-  progressStore.set(userId!, list)
-
-  const saved = idx >= 0 ? list[idx] : record
-
-  return Response.json({ ok: true, progress: saved, source: "mock" as const }, { headers })
 }

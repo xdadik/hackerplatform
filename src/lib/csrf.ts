@@ -21,7 +21,8 @@ export function getOrCreateCsrfToken(): string {
     if (!t) {
       t = generateCsrfToken()
       sessionStorage.setItem(CSRF_KEY, t)
-      document.cookie = `${CSRF_KEY}=${t}; Path=/; SameSite=Strict`
+      const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : ""
+      document.cookie = `${CSRF_KEY}=${t}; Path=/; SameSite=Strict${secure}`
     }
     return t
   } catch {

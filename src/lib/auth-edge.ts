@@ -41,5 +41,11 @@ export async function verifyAdminTokenEdge(
 export function getAdminSessionTokenFromCookie(cookieHeader: string): string | null {
   if (!cookieHeader) return null
   const match = cookieHeader.match(/(?:^|;\s*)aegis_admin_session=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    // malformed %-sequences (e.g. %ZZ) must not crash the middleware
+    return match[1]
+  }
 }

@@ -35,12 +35,23 @@ function applySecurityHeaders(res: NextResponse): void {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isAdminApi = pathname.startsWith("/api/admin");
+  // Login/logout must stay reachable so an admin can obtain the session
+  // cookie in the first place (otherwise nobody could ever authenticate).
+  const isAuthEndpoint =
+    pathname === "/api/admin/login" || pathname === "/api/admin/logout";
+  const isAdminApi = pathname.startsWith("/api/admin") && !isAuthEndpoint;
 
   if (isAdminPage || isAdminApi) {
     const cookieHeader = request.headers.get("cookie") ?? "";
     const token = getAdminSessionTokenFromCookie(cookieHeader);
-    const secret = process.env.ADMIN_PASS || process.env.AEGIS_ADMIN_PASS || "";
+    // Must mirror the chain in /api/admin/login and src/lib/admin-api.ts:
+    // NEXTAUTH_SECRET is the signing key; ADMIN_PASS is the dev fallback.
+    const secret =
+      process.env.NEXTAUTH_SECRET ||
+      process.env.ADMIN_PASS ||
+      process.env.AEGIS_ADMIN_PASS ||
+      process.env.ADMIN_PASSWORD ||
+      "";
     const valid = await verifyAdminTokenEdge(token, secret);
 
     if (!valid) {
