@@ -19,6 +19,22 @@ function checkAdmin(request: Request): boolean {
   return verifyAdminToken(token, secret)
 }
 
+async function writeAudit(action: string, table: string, targetId: string | null, detail: unknown) {
+  try {
+    const supabase = getServiceSupabase()
+    if (!supabase) return
+    await supabase.from("audit_logs").insert({
+      actor: "admin",
+      action,
+      resource: table,
+      target_id: targetId,
+      detail: (detail ?? null) as Record<string, unknown> | null,
+    })
+  } catch {
+    /* audit table may not exist yet — non-fatal */
+  }
+}
+
 function str(v: unknown, max = 500): string {
   return typeof v === "string" ? v.slice(0, max).trim() : ""
 }
@@ -259,5 +275,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ tab
     }
     return Response.json({ error: "Failed to create" }, { status: 500 })
   }
+  await writeAudit("create", table, String((data as Record<string, unknown>)?.id ?? ""), { fields: Object.keys(row) })
   return Response.json({ item: fromRow(table, data as Record<string, unknown>) }, { status: 201 })
 }

@@ -18,6 +18,22 @@ function checkAdmin(request: Request): boolean {
   return verifyAdminToken(token, secret)
 }
 
+async function writeAudit(action: string, table: string, targetId: string | null) {
+  try {
+    const supabase = getServiceSupabase()
+    if (!supabase) return
+    await supabase.from("audit_logs").insert({
+      actor: "admin",
+      action,
+      resource: table,
+      target_id: targetId,
+      detail: null,
+    })
+  } catch {
+    /* audit table may not exist yet — non-fatal */
+  }
+}
+
 function str(v: unknown, max = 500): string {
   return typeof v === "string" ? v.slice(0, max).trim() : ""
 }
@@ -175,6 +191,7 @@ export async function PATCH(
   const { data, error } = await supabase.from(table).update(patch).eq("id", id).select("*").limit(1)
   if (error) return Response.json({ error: "Failed to update" }, { status: 500 })
   if (!data || data.length === 0) return Response.json({ error: "Not found" }, { status: 404 })
+  await writeAudit("update", table, id)
   return Response.json({ item: data[0], ok: true })
 }
 
@@ -190,5 +207,6 @@ export async function DELETE(
   const { error, count } = await supabase.from(table).delete({ count: "exact" }).eq("id", id)
   if (error) return Response.json({ error: "Failed to delete" }, { status: 500 })
   if (!count) return Response.json({ error: "Not found" }, { status: 404 })
+  await writeAudit("delete", table, id)
   return Response.json({ ok: true })
 }
