@@ -20,6 +20,7 @@ const securityHeaders = [
       "img-src 'self' data: blob: https:",
       "media-src 'self' blob: https:",
       "connect-src 'self' https:",
+      "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
       "frame-src https://www.youtube-nocookie.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",

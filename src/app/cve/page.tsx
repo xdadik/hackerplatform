@@ -298,9 +298,9 @@ export default function CvePage() {
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)]">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Source: NVD • CISA KEV • Vendor
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)]">
-                    <Clock className="w-3 h-3" /> Updated 2 hours ago
-                  </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--text-2)]">
+                      <Clock className="w-3 h-3" /> Curated collection
+                    </span>
                   <span className="hidden sm:inline-flex items-center gap-1.5 text-[var(--text-3)]">
                     <Info className="w-3 h-3" /> CVSS v3.1 • Sorted by severity
                   </span>
@@ -559,7 +559,7 @@ export default function CvePage() {
 
                   <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-2)]/50 flex flex-wrap items-center justify-between gap-3 text-[11px]">
                     <span className="text-[var(--text-3)] flex items-center gap-2">
-                      <Shield className="w-3.5 h-3.5" /> Data: NVD • CISA • Vendor • Refreshed every 6 hours
+                      <Shield className="w-3.5 h-3.5" /> Data: NVD • CISA • Vendor advisories
                     </span>
                     <span className="text-[var(--text-2)] hidden sm:inline">Each row opens detail — external links for verification</span>
                   </div>

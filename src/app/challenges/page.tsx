@@ -7,16 +7,30 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { challenges } from "@/lib/data"
 import { Stagger, FadeIn } from "@/components/ui/stagger"
 import { Search, Trophy, Filter, Bookmark, X, Clock, Users, Award, Lock, BookmarkCheck } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 
 const categories = ["All", "Web", "Crypto", "Pwn", "Reverse", "Forensics", "OSINT", "Cloud", "Mobile", "Hardware", "Blue Team", "Misc"]
+
+type Challenge = {
+  id: string
+  name: string
+  category: string
+  difficulty: string
+  points: number
+  solves: number
+  tags: string[]
+  status: string
+}
 
 export default function ChallengesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isPaid, setIsPaid] = React.useState(false)
+  const { user } = useAuth()
+  const isPaid = user?.plan === "go" || user?.plan === "plus"
+  const [challenges, setChallenges] = React.useState<Challenge[]>([])
+  const [listLoading, setListLoading] = React.useState(true)
   const [q, setQ] = React.useState(() => searchParams.get("q") || "")
   const [activeCat, setActiveCat] = React.useState(() => searchParams.get("cat") || "All")
   const [diffFilter, setDiffFilter] = React.useState<Set<string>>(() => {
@@ -46,20 +60,21 @@ export default function ChallengesPage() {
       map.set(c.category, (map.get(c.category) || 0) + 1)
     }
     return map
-  }, [])
+  }, [challenges])
 
   React.useEffect(() => {
-    try {
-      const rawUser = localStorage.getItem("aegis_user")
-      if (rawUser) {
-        const u = JSON.parse(rawUser) as { plan?: string }
-        setIsPaid(u?.plan === "go" || u?.plan === "plus")
-        return
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch("/api/challenges")
+        const body = await res.json().catch(() => ({ challenges: [] }))
+        if (!cancelled) { setChallenges(body.challenges ?? []); setListLoading(false) }
+      } catch {
+        if (!cancelled) { setChallenges([]); setListLoading(false) }
       }
-    } catch {}
-    const plan = localStorage.getItem("aegis_plan")
-    const auth = localStorage.getItem("aegis_auth")
-    setIsPaid(!!auth && (plan === "go" || plan === "plus"))
+    }
+    load()
+    return () => { cancelled = true }
   }, [])
 
   React.useEffect(()=>{ try{ const raw=localStorage.getItem("aegis_bookmarks"); if(raw) setBookmarks(new Set(JSON.parse(raw))) }catch{} },[])
@@ -124,7 +139,7 @@ export default function ChallengesPage() {
     if(sort==="points") arr=[...arr].sort((a,b)=>b.points-a.points)
     if(sort==="solves") arr=[...arr].sort((a,b)=>b.solves-a.solves)
     return arr
-  },[activeCat,diffFilter,statusFilter,q,sort,bookmarks])
+  },[activeCat,diffFilter,statusFilter,q,sort,bookmarks,challenges])
 
   // pagination 6 per page
   const perPage=6
@@ -143,7 +158,7 @@ export default function ChallengesPage() {
               <div className="w-8 h-8 rounded-[8px] bg-amber-500 text-white flex items-center justify-center shrink-0" aria-hidden="true"><Lock className="w-4 h-4" aria-hidden="true" /></div>
               <div>
                 <div className="text-[13px] font-[600] text-amber-900 dark:text-amber-200">Challenges are for paid members</div>
-                <div className="text-[12px] text-amber-800 dark:text-amber-300">Upgrade to unlock all 1,204 challenges. Only premium users can open challenges.</div>
+                <div className="text-[12px] text-amber-800 dark:text-amber-300">Upgrade to unlock all challenges. Only paid members can open challenges.</div>
               </div>
             </div>
             <Link href="/settings/billing" className="shrink-0"><Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-full bg-amber-500 hover:bg-amber-600 text-white">Upgrade plan</Button></Link>
@@ -153,7 +168,7 @@ export default function ChallengesPage() {
           <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div>
               <h1 className="text-[22px] font-[650] tracking-[-0.03em]">Challenges</h1>
-              <p className="mt-1 text-[13.5px] text-[var(--text-2)]">1,204 challenges across 11 categories. Search, filter, sort, bookmark — clean and fast. {!isPaid && "Locked until upgrade."}</p>
+              <p className="mt-1 text-[13.5px] text-[var(--text-2)]">CTF-style challenges across multiple categories. Search, filter, sort, bookmark — clean and fast. {!isPaid && "Locked until upgrade."}</p>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               <div className="relative w-full sm:w-auto">
@@ -265,7 +280,7 @@ export default function ChallengesPage() {
                           <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full border ${ch.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300" : ch.difficulty === "Medium" ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900" : ch.difficulty === "Hard" ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30" : "bg-zinc-900 text-white border-zinc-800"}`}>{ch.difficulty}</span>
                           <span className="text-[11px] font-mono text-[var(--text-3)]">{ch.points} pts</span>
                           <span className="text-[11px] text-[var(--text-3)]" aria-hidden="true">•</span>
-                          <span className="text-[11px] text-[var(--text-3)] flex items-center gap-1"><Users className="w-3 h-3" aria-hidden="true" /> {ch.solves.toLocaleString()}</span>
+                          <span className="text-[11px] text-[var(--text-3)] flex items-center gap-1"><Users className="w-3 h-3" aria-hidden="true" /> {ch.solves.toLocaleString()} solves</span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                           {ch.tags.map(tag => (
@@ -276,7 +291,6 @@ export default function ChallengesPage() {
                           <Badge variant={isBookmarked ? "accent" : ch.status === "solved" ? "success" : ch.status === "attempted" ? "secondary" : "outline"} className="text-[11px]">
                             {isBookmarked ? "★ Bookmarked" : ch.status === "solved" ? "✓ Solved" : ch.status === "attempted" ? "Attempted" : "Not started"}
                           </Badge>
-                          <span className="text-[11px] text-[var(--text-3)] flex items-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" /> { (ch.solves % 50 + 10)} min avg</span>
                         </div>
                         <Link href={href} className="mt-3 inline-flex text-[12px] font-medium text-[var(--accent)] hover:underline">Open challenge →</Link>
                       </CardContent>
@@ -290,9 +304,9 @@ export default function ChallengesPage() {
                 <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center" aria-hidden="true">
                   <Award className="w-5 h-5 text-[var(--text-2)]" aria-hidden="true" />
                 </div>
-                <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em] text-[var(--text)]">No challenges match filters</div>
-                <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[280px] mx-auto">Try adjusting category or difficulty, or browse recommended challenges.</div>
-                <Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200" onClick={()=>{setQ(""); setActiveCat("All"); setDiffFilter(new Set()); setStatusFilter(new Set()); setPage(1)}}>Clear filters</Button>
+                <div className="mt-3 text-[14px] font-[600] tracking-[-0.01em] text-[var(--text)]">{hasActiveFilters ? "No challenges match filters" : "No challenges published yet"}</div>
+                <div className="mt-1 text-[12px] leading-5 text-[var(--text-2)] max-w-[280px] mx-auto">{hasActiveFilters ? "Try adjusting category or difficulty." : "New challenges will appear here when published."}</div>
+                {hasActiveFilters && <Button size="sm" className="mt-4 h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[var(--text)] text-[var(--background)] hover:bg-zinc-800 dark:hover:bg-zinc-200" onClick={()=>{setQ(""); setActiveCat("All"); setDiffFilter(new Set()); setStatusFilter(new Set()); setPage(1)}}>Clear filters</Button>}
               </Card></div>
               )}
             </Stagger>

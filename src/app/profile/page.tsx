@@ -13,32 +13,32 @@ import { useAuth } from "@/components/auth-provider"
 import { sanitizeInput } from "@/lib/sanitize"
 
 export default function ProfilePage() {
-  const { user, isLoading, isLoggedIn } = useAuth()
+  const { user, isLoading, isLoggedIn, refresh } = useAuth()
   const router = useRouter()
-  const displayName = user?.name || "Alex Morgan"
-  const displayEmail = user?.email || "alexmorgan@example.com"
+  const displayName = user?.name || ""
+  const displayEmail = user?.email || ""
   const [isEditing, setIsEditing]=React.useState(false)
   const [editName, setEditName]=React.useState(displayName)
-  const [editBio, setEditBio]=React.useState("Security engineer focused on web exploitation and cloud security. OSCP, CRTO. I publish research on IAM misconfigurations and build detection tooling for SOC teams.")
+  const [editBio, setEditBio]=React.useState("")
   const [bio, setBio]=React.useState(editBio)
   const [toast, setToast]=React.useState<string|null>(null)
   const [nameError, setNameError]=React.useState<string|null>(null)
   const handle = React.useMemo(() => {
-    const local = (displayEmail.split("@")[0] || "alexmorgan").toLowerCase().replace(/[^a-z0-9._-]/g, "")
-    return local || "alexmorgan"
+    const local = (displayEmail.split("@")[0] || "user").toLowerCase().replace(/[^a-z0-9._-]/g, "")
+    return local || "user"
   }, [displayEmail])
   const initials = React.useMemo(() => {
     const parts = (isEditing? editName : displayName).trim().split(/\s+/).filter(Boolean)
-    if (parts.length === 0) return "AM"
+    if (parts.length === 0) return (displayEmail.slice(0, 2) || "?").toUpperCase()
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
     return (parts[0][0] + parts[1][0]).toUpperCase()
-  }, [displayName, editName, isEditing])
+  }, [displayName, editName, isEditing, displayEmail])
   const joinedLabel = React.useMemo(() => {
-    if (!user?.createdAt) return "Joined Mar 2023"
+    if (!user?.createdAt) return ""
     try {
       const d = new Date(user.createdAt)
       return `Joined ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
-    } catch { return "Joined Mar 2023" }
+    } catch { return "" }
   }, [user?.createdAt])
 
   // Auth guard: redirect to login after loading if not logged in
@@ -52,8 +52,6 @@ export default function ProfilePage() {
     try{
       const b=localStorage.getItem("aegis_profile_bio")
       if(b) { setBio(b); setEditBio(b) }
-      const n=localStorage.getItem("aegis_profile_name")
-      if(n) setEditName(n)
     }catch{}
   },[])
 
@@ -67,28 +65,33 @@ export default function ProfilePage() {
     setTimeout(()=>setToast(null), 3000)
   }
 
-  const saveProfile=()=>{
+  const saveProfile=async()=>{
     const cleanName = sanitizeInput(editName, 64)
     const cleanBio = sanitizeInput(editBio, 500)
     if(!cleanName.trim()) { setNameError("Name required"); return }
     setNameError(null)
-    try{
-      localStorage.setItem("aegis_profile_bio", cleanBio)
-      localStorage.setItem("aegis_profile_name", cleanName)
-      const raw=localStorage.getItem("aegis_user")
-      if(raw){
-        const u=JSON.parse(raw)
-        u.name=cleanName
-        localStorage.setItem("aegis_user", JSON.stringify(u))
+    try{ localStorage.setItem("aegis_profile_bio", cleanBio) }catch{}
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cleanName }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setNameError(typeof body.error === "string" ? body.error : "Could not save name")
+        return
       }
-    }catch{}
+      await refresh()
+    } catch {
+      setNameError("Could not reach the server")
+      return
+    }
     setBio(cleanBio)
     setEditName(cleanName)
     setEditBio(cleanBio)
     setIsEditing(false)
-    showToast("Profile saved — sanitized and stored locally")
-    // Trigger auth provider sync via storage event? Manually dispatch
-    try{ window.dispatchEvent(new StorageEvent("storage", { key: "aegis_user" } as any)) }catch{}
+    showToast("Profile saved")
   }
 
   const cancelEdit=()=>{
@@ -121,7 +124,7 @@ export default function ProfilePage() {
         <div className="px-4 sm:px-6 lg:px-8 py-12 max-w-[1080px] text-center">
           <Shield className="w-10 h-10 mx-auto text-[var(--text-3)]" aria-hidden="true" />
           <h1 className="mt-4 text-[18px] font-[600]">Sign in to view your profile</h1>
-          <p className="mt-1 text-[13px] text-[var(--text-2)]">Your profile data is private and stored locally in demo.</p>
+          <p className="mt-1 text-[13px] text-[var(--text-2)]">Your profile data is private to your account.</p>
           <Link href="/login"><Button className="mt-4">Log in</Button></Link>
         </div>
       </AppShell>

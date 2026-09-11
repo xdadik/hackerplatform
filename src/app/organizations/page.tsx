@@ -43,14 +43,13 @@ export default function OrganizationsPage() {
                 </ul>
                 <div className="mt-6 flex gap-2">
                   <Button className="rounded-[8px]" onClick={()=>setShowContact(v=>!v)}>{showContact?"Close form":"Contact sales"}</Button>
-                  <Button variant="secondary" className="rounded-[8px]" onClick={()=>alert("Demo: organization analytics preview — real data after SSO setup.")}>View demo</Button>
                 </div>
                 {showContact && (
                   <div className="mt-4 p-4 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] space-y-3">
                     <Input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Work email" className="h-9 bg-[var(--surface)]" />
                     <textarea value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Tell us about your team size and needs..." className="w-full min-h-[80px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-3 text-[13px]" />
                     <Button size="sm" className="h-8 gap-1.5 w-full" onClick={handleContact} disabled={sent}><Send className="w-3.5 h-3.5" /> {sent ? "✓ Sent — we'll reach out!" : "Send request"}</Button>
-                    <div className="text-[11px] text-[var(--text-3)]">saved locally — emails sales in prod.</div>
+                    <div className="text-[11px] text-[var(--text-3)]">We typically respond within 2 business days.</div>
                   </div>
                 )}
               </div>
@@ -59,16 +58,16 @@ export default function OrganizationsPage() {
                   <div className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)] mb-3">Preview — Organization panel</div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-2.5 rounded-[8px] bg-[var(--surface)] border border-[var(--border)]">
-                      <span className="text-[12.5px] font-medium flex items-center gap-2"><Building2 className="w-3.5 h-3.5" /> Acme Security</span>
-                      <Badge variant="success" className="text-[11px]">Active</Badge>
+                      <span className="text-[12.5px] font-medium flex items-center gap-2"><Building2 className="w-3.5 h-3.5" /> Your organization</span>
+                      <Badge variant="secondary" className="text-[11px]">Setup</Badge>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="p-3 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] text-center"><div className="text-[11px] text-[var(--text-3)]">Members</div><div className="text-[16px] font-[700]">142</div></div>
-                      <div className="p-3 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] text-center"><div className="text-[11px] text-[var(--text-3)]">Completion</div><div className="text-[16px] font-[700]">68%</div></div>
+                      <div className="p-3 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] text-center"><div className="text-[11px] text-[var(--text-3)]">Members</div><div className="text-[16px] font-[700]">—</div></div>
+                      <div className="p-3 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] text-center"><div className="text-[11px] text-[var(--text-3)]">Completion</div><div className="text-[16px] font-[700]">—</div></div>
                     </div>
                     <div className="p-2.5 rounded-[8px] bg-[var(--surface)] border border-[var(--border)]">
                       <div className="text-[11px] font-medium">Private labs</div>
-                      <div className="text-[11px] text-[var(--text-2)]">3 private • 12 assigned</div>
+                      <div className="text-[11px] text-[var(--text-2)]">Assign content after setup</div>
                     </div>
                   </div>
                 </div>

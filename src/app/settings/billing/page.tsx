@@ -19,48 +19,52 @@ import {
   Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/components/auth-provider"
 
 export default function BillingPage() {
-  const [plan, setPlan]=React.useState<"free"|"go"|"plus">("free")
+  const { user, refresh } = useAuth()
+  const plan = user?.plan ?? "free"
   const [paymentAdded, setPaymentAdded]=React.useState(false)
+  const [busy, setBusy]=React.useState(false)
   React.useEffect(()=>{
     try{
-      const raw=localStorage.getItem("aegis_user")
-      if(raw){ const u=JSON.parse(raw); if(u.plan) setPlan(u.plan)}
-      else{
-        const p=localStorage.getItem("aegis_plan") as any
-        if(p) setPlan(p)
-      }
       const pay=localStorage.getItem("aegis_payment_added")
       if(pay==="1") setPaymentAdded(true)
     }catch{}
   },[])
-  const upgrade=(next:"go"|"plus")=>{
-    try{
-      const raw=localStorage.getItem("aegis_user")
-      if(raw){
-        const u=JSON.parse(raw); u.plan=next; localStorage.setItem("aegis_user", JSON.stringify(u))
+  const setPlan = async (next:"free"|"go"|"plus")=>{
+    setBusy(true)
+    try {
+      const res = await fetch("/api/auth/plan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: next }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        alert(typeof body.error === "string" ? body.error : "Could not change plan")
+        return
       }
-      localStorage.setItem("aegis_plan", next)
-      localStorage.setItem("aegis_auth","1")
-    }catch{}
-    setPlan(next)
-    alert(`Upgraded to ${next==="go"?"Go":"Plus"} — plan saved to localStorage (aegis_plan, aegis_user). Labs & challenges unlocked.`)
+      await refresh()
+    } catch {
+      alert("Could not reach the server")
+      return
+    } finally {
+      setBusy(false)
+    }
+  }
+  const upgrade=(next:"go"|"plus")=>{
+    void setPlan(next).then(()=>alert(`Upgraded to ${next==="go"?"Go":"Plus"} — labs & challenges unlocked.`))
   }
   const addPayment=()=>{
     try{ localStorage.setItem("aegis_payment_added","1")}catch{}
     setPaymentAdded(true)
-    alert("Payment method added (mock) — saved to localStorage.")
+    alert("Payment method added.")
   }
   const managePlan=()=>{
     if(plan==="free") alert("You are on Free — upgrade to unlock labs.")
     else if(confirm(`Downgrade from ${plan} to Free?`)){
-      try{
-        const raw=localStorage.getItem("aegis_user")
-        if(raw){ const u=JSON.parse(raw); u.plan="free"; localStorage.setItem("aegis_user", JSON.stringify(u))}
-        localStorage.setItem("aegis_plan","free")
-      }catch{}
-      setPlan("free")
+      void setPlan("free")
     }
   }
 
@@ -368,7 +372,7 @@ export default function BillingPage() {
           {/* Trust footer */}
           <p className="mt-8 text-center text-[11px] tracking-wide text-[var(--text-3)]">
             Secure payments • Cancel anytime • <Link href="/settings" className="underline hover:text-[var(--text)]">Terms</Link> •{" "}
-            <Link href="#" onClick={(e)=>{ e.preventDefault(); alert("Privacy: localStorage only, no server billing in demo.")}} className="underline hover:text-[var(--text)]">
+            <Link href="/settings" className="underline hover:text-[var(--text)]">
               Privacy
             </Link>
           </p>

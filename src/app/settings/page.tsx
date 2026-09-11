@@ -102,37 +102,53 @@ export default function SettingsPage() {
 
 function ProfileView() {
   const { theme, toggle, setTheme } = useTheme()
+  const { user, refresh } = useAuth()
   const [fullName, setFullName] = React.useState("")
   const [preferred, setPreferred] = React.useState("")
   const [work, setWork] = React.useState("Select")
   const [instructions, setInstructions] = React.useState("")
   const [saved, setSaved] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
+  React.useEffect(()=>{
+    if (user?.name) { setFullName(user.name); setPreferred(user.name.split(" ")[0] || "") }
+  },[user?.name])
   React.useEffect(()=>{
     try{
-      const raw=localStorage.getItem("aegis_user")
-      if(raw){ const u=JSON.parse(raw); setFullName(u.name||""); setPreferred(u.name?.split(" ")[0]||"")}
       const inst=localStorage.getItem("aegis_instructions")
       if(inst) setInstructions(inst)
       const w=localStorage.getItem("aegis_work")
       if(w) setWork(w)
     }catch{}
   },[])
-  const save=()=>{
+  const save=async()=>{
     const cleanName = sanitizeInput(fullName, 64)
     const cleanPref = sanitizeInput(preferred, 32)
     const cleanInst = sanitizeInput(instructions, 500)
     const cleanWork = sanitizeInput(work, 32)
+    setSaveError(null)
     try{
-      const raw=localStorage.getItem("aegis_user")
-      if(raw){
-        const u=JSON.parse(raw)
-        u.name=cleanName||u.name
-        localStorage.setItem("aegis_user", JSON.stringify(u))
-      }
       localStorage.setItem("aegis_instructions", cleanInst)
       localStorage.setItem("aegis_work", cleanWork)
       localStorage.setItem("aegis_preferred", cleanPref)
     }catch{}
+    if (cleanName) {
+      try {
+        const res = await fetch("/api/auth/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: cleanName }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          setSaveError(typeof body.error === "string" ? body.error : "Could not save name")
+          return
+        }
+        await refresh()
+      } catch {
+        setSaveError("Could not reach the server")
+        return
+      }
+    }
     setSaved(true); setTimeout(()=>setSaved(false),2000)
   }
   return (
@@ -183,8 +199,9 @@ function ProfileView() {
           </div>
           <div className="mt-4 flex gap-2 items-center">
             <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={save} aria-label="Save preferences">{saved ? "✓ Saved" : "Save preferences"}</Button>
-            <span className="text-[11px] text-zinc-500">Saved to localStorage (aegis_user, aegis_instructions)</span>
+            <span className="text-[11px] text-zinc-500">Name syncs to your account • Other preferences stay in this browser</span>
           </div>
+          {saveError && <div className="mt-2 text-[12px] text-red-600">{saveError}</div>}
         </div>
       </div>
     </div>

@@ -23,10 +23,7 @@ export default function CommunityPage() {
       try{ const r=localStorage.getItem("aegis_discussions"); if(r) return JSON.parse(r)}catch{}
     }
     return [
-      { pin: true, id:"1", title: "Welcome: How to get the most from Aegis Community", author: "Aegis Team", time: "Pinned", replies: 42, excerpt: "Guidelines for high-quality technical discussion, mentorship, and research review. Please read before posting.", cat:"Technical" },
-      { id:"2", title: "Best way to practice AD enumeration without a full lab?", author: "alexmorgan", time: "2 hours ago", replies: 12, excerpt: "Looking for lightweight options to practice BloodHound-style analysis. Any recommended datasets or GoAD setups?", cat:"Technical" },
-      { id:"3", title: "Detection engineering: Sigma vs. KQL for Entra ID — which do you prefer in production?", author: "james.k", time: "5 hours ago", replies: 18, excerpt: "We’re standardizing on Sentinel. Curious how teams handle rule portability and testing.", cat:"Technical" },
-      { id:"4", title: "[Writeup] Cloud SSRF to Metadata — alternative path via IMDSv2 bypass", author: "priya_n", time: "Yesterday", replies: 8, excerpt: "Found a different bypass using header injection. Would love review before publishing.", cat:"Groups" },
+      { pin: true, id:"1", title: "Welcome: How to get the most from Aegis Community", author: "Aegis Team", time: "Pinned", replies: 0, excerpt: "Guidelines for high-quality technical discussion, mentorship, and research review. Please read before posting.", cat:"Technical" },
     ]
   })
   React.useEffect(()=>{ try{ localStorage.setItem("aegis_discussions", JSON.stringify(discussions))}catch{}},[discussions])
@@ -54,7 +51,7 @@ export default function CommunityPage() {
   }
   const deletePost=(id:string)=>{
     const d=discussions.find(x=>x.id===id)
-    if(d?.author!=="you") return alert("Can only delete your own posts (demo)")
+    if(d?.author!=="you") return alert("Can only delete your own posts")
     if(confirm("Delete post?")) setDiscussions(prev=>prev.filter(x=>x.id!==id))
   }
   const toggleGroup=(name:string)=>{

@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 
 const skills = [
-  { name: "Web Security", level: "Intermediate", pct: 72, next: "Advanced", prereq: "Networking • Linux", related: ["Cloud Security", "Threat Intelligence"] },
-  { name: "Networking", level: "Beginner", pct: 45, next: "Intermediate", prereq: "None", related: ["Linux", "SOC"] },
-  { name: "Linux", level: "Intermediate", pct: 68, next: "Advanced", prereq: "Networking", related: ["Reverse Engineering", "Forensics"] },
-  { name: "Cloud Security", level: "Beginner", pct: 22, next: "Intermediate", prereq: "Networking • Linux", related: ["Web Security", "Active Directory"] },
-  { name: "Active Directory", level: "Beginner", pct: 8, next: "Intermediate", prereq: "Networking • Windows", related: ["Cloud Security"] },
-  { name: "Reverse Engineering", level: "Beginner", pct: 12, next: "Intermediate", prereq: "Linux • Assembly", related: ["Malware Analysis"] },
+  { name: "Web Security", level: "Not started", pct: 0, next: "Beginner", prereq: "Networking • Linux", related: ["Cloud Security", "Threat Intelligence"] },
+  { name: "Networking", level: "Not started", pct: 0, next: "Beginner", prereq: "None", related: ["Linux", "SOC"] },
+  { name: "Linux", level: "Not started", pct: 0, next: "Beginner", prereq: "Networking", related: ["Reverse Engineering", "Forensics"] },
+  { name: "Cloud Security", level: "Not started", pct: 0, next: "Beginner", prereq: "Networking • Linux", related: ["Web Security", "Active Directory"] },
+  { name: "Active Directory", level: "Not started", pct: 0, next: "Beginner", prereq: "Networking • Windows", related: ["Cloud Security"] },
+  { name: "Reverse Engineering", level: "Not started", pct: 0, next: "Beginner", prereq: "Linux • Assembly", related: ["Malware Analysis"] },
 ]
 
 export default function SkillsPage() {

@@ -13,13 +13,7 @@ export default function NotificationsPage() {
     if(typeof window!=="undefined"){
       try{ const r=localStorage.getItem("aegis_notifications"); if(r) return JSON.parse(r)}catch{}
     }
-    return [
-      { id:"1", icon: CheckCircle2, title: "Lab completed: Network Traffic Analysis", time: "2 hours ago", desc: "+120 XP • Certificate available", isNew:true },
-      { id:"2", icon: Award, title: "Achievement unlocked: SQL Injection Master", time: "5 hours ago", desc: "Completed all Web SQL labs" },
-      { id:"3", icon: FileText, title: "Research featured: IAM Trust Policies", time: "Yesterday", desc: "Your publication was featured as Staff Pick" },
-      { id:"4", icon: Users, title: "Team activity: Red Team — Atlas", time: "2 days ago", desc: "Team rank improved to #12 in Winter CTF" },
-      { id:"5", icon: Trophy, title: "Competition: Winter CTF starts in 6 days", time: "3 days ago", desc: "Your team is registered. Prepare your environment." },
-    ]
+    return []
   })
   React.useEffect(()=>{ try{ localStorage.setItem("aegis_notifications", JSON.stringify(notes))}catch{}},[notes])
   const dismiss=(id:string)=> setNotes(prev=>prev.filter(n=>n.id!==id))
@@ -59,7 +53,7 @@ export default function NotificationsPage() {
             </Card>
           ))}
         </div>
-        <div className="mt-3 text-[11px] text-[var(--text-3)]">Stored in localStorage (aegis_notifications) — dismiss, mark read, clear all working.</div>
+        <div className="mt-3 text-[11px] text-[var(--text-3)]">Lab completions, achievements, and announcements will appear here.</div>
       </div>
     </AppShell>
   )

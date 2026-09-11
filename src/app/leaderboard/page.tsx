@@ -10,18 +10,10 @@ import { leaderboard } from "@/lib/data"
 import { Stagger, FadeIn, CountUp } from "@/components/ui/stagger"
 import { Trophy, TrendingUp, Crown } from "lucide-react"
 
-// If leaderboard empty (clean state), show mock fallback for UI
-const demoFallback = [
-  { rank:1, username:"sophiachen", reputation:12400, labs:80, challenges:120, avatar:"SC" },
-  { rank:2, username:"marcusreid", reputation:11000, labs:70, challenges:100, avatar:"MR" },
-  { rank:3, username:"alexmorgan", reputation:8841, labs:64, challenges:76, avatar:"AM" },
-  { rank:4, username:"priya_n", reputation:8200, labs:60, challenges:70, avatar:"PN" },
-  { rank:5, username:"elenav", reputation:7900, labs:58, challenges:68, avatar:"EV" },
-]
 export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = React.useState("global")
   const [page, setPage] = React.useState(1)
-  const data = leaderboard.length>0 ? leaderboard : demoFallback
+  const data = leaderboard
   const perPage=5
   const totalPages=Math.max(1, Math.ceil(Math.max(0, data.length-3)/perPage))
   const paged=data.filter(r=>r.rank>3).slice((page-1)*perPage, page*perPage)
@@ -80,7 +72,7 @@ export default function LeaderboardPage() {
               <Card>
                 <CardHeader className="pb-3 flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2"><Trophy className="w-4 h-4" aria-hidden="true" /> Global rankings</CardTitle>
-                  <span className="text-[11px] text-[var(--text-3)]">Updates every 5 minutes • Last: 2 min ago</span>
+                  <span className="text-[11px] text-[var(--text-3)]">Updates as users earn reputation</span>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -100,19 +92,18 @@ export default function LeaderboardPage() {
                         {paged.length===0 ? (
                           <tr><td colSpan={6} className="px-4 py-6 text-center text-[12px] text-[var(--text-2)]">No more rankings — page {page} empty</td></tr>
                         ) : paged.map(row => (
-                          <tr key={row.rank} className={`hover:bg-[var(--surface-2)] transition-colors ${row.username === "alexmorgan" ? "bg-[var(--accent-muted)]" : ""}`} aria-current={row.username === "alexmorgan" ? true : undefined}>
-                            <td className="px-4 py-3">
-                              <span className="inline-flex w-6 h-6 rounded-full items-center justify-center text-[11px] font-bold border bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-2)]" aria-label={`Rank ${row.rank}`}>
-                                {row.rank}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Link href={`/profile?user=${row.username}`} className="flex items-center gap-2.5 hover:opacity-80">
-                                <div className="w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[11px] font-semibold" aria-hidden="true">{row.avatar}</div>
-                                <span className="text-[13px] font-[500] hover:text-[var(--accent)] hover:underline">{row.username}</span>
-                                {row.username === "alexmorgan" && <Badge variant="accent" className="text-[10px]">You</Badge>}
-                              </Link>
-                            </td>
+                            <tr key={row.rank} className="hover:bg-[var(--surface-2)] transition-colors">
+                              <td className="px-4 py-3">
+                                <span className="inline-flex w-6 h-6 rounded-full items-center justify-center text-[11px] font-bold border bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-2)]" aria-label={`Rank ${row.rank}`}>
+                                  {row.rank}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Link href={`/profile?user=${row.username}`} className="flex items-center gap-2.5 hover:opacity-80">
+                                  <div className="w-7 h-7 rounded-full bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[11px] font-semibold" aria-hidden="true">{row.avatar}</div>
+                                  <span className="text-[13px] font-[500] hover:text-[var(--accent)] hover:underline">{row.username}</span>
+                                </Link>
+                              </td>
                             <td className="px-4 py-3 text-[13px] font-mono hidden sm:table-cell"><CountUp value={row.labs} /></td>
                             <td className="px-4 py-3 text-[13px] font-mono hidden sm:table-cell"><CountUp value={row.challenges} /></td>
                             <td className="px-4 py-3 text-[13px] font-mono font-[600] text-right"><CountUp value={row.reputation} /></td>

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { labs, challenges, skillProgress } from "@/lib/data"
 import { Stagger, FadeIn, CountUp, ProgressAnimated } from "@/components/ui/stagger"
-import { Clock, Target, Trophy, FlaskConical, BookOpen, Zap, ArrowRight, CheckCircle2, Play, Calendar, Award, TrendingUp, Wrench, Shield, ExternalLink } from "lucide-react"
+import { Target, Trophy, FlaskConical, BookOpen, Zap, ArrowRight, CheckCircle2, Play, Calendar, Award, TrendingUp, Wrench, Shield, ExternalLink } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 
 type ProgressState = { pct: number; completed: number; total: number; hasActivity: boolean }
@@ -36,6 +36,10 @@ export default function DashboardPage() {
   const firstName = displayName.trim().split(/\s+/)[0] || "Guest"
   const [real, setReal] = React.useState<ProgressState>({ pct: 0, completed: 0, total: 32, hasActivity: false })
   const [progressLoading, setProgressLoading] = React.useState(true)
+  const [solvedCount, setSolvedCount] = React.useState(0)
+  const [upcomingEvents, setUpcomingEvents] = React.useState<{ id: string; title: string; date: string; status: string }[]>([])
+  const [cves, setCves] = React.useState<{ id: string; cveId: string; title: string; severity: string; status: string; published: string }[]>([])
+  const planLabel = user?.plan === "go" ? "Go" : user?.plan === "plus" ? "Plus" : "Free"
 
   React.useEffect(() => {
     try {
@@ -45,7 +49,35 @@ export default function DashboardPage() {
         setReal(validateProgress(parsed))
       }
     } catch {}
+    try {
+      let n = 0
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith("aegis_solved_") && localStorage.getItem(k) === "1") n++
+      }
+      setSolvedCount(n)
+    } catch {}
     setProgressLoading(false)
+  }, [])
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const [evRes, cveRes] = await Promise.all([
+          fetch("/api/events").then(r => r.json().catch(() => ({ events: [] }))),
+          fetch("/api/cves").then(r => r.json().catch(() => ({ cves: [] }))),
+        ])
+        if (!cancelled) {
+          setUpcomingEvents((evRes.events ?? []).slice(0, 2))
+          setCves((cveRes.cves ?? []).slice(0, 4))
+        }
+      } catch {
+        if (!cancelled) { setUpcomingEvents([]); setCves([]) }
+      }
+    }
+    load()
+    return () => { cancelled = true }
   }, [])
 
   return (
@@ -59,9 +91,6 @@ export default function DashboardPage() {
               <p className="mt-1 text-[13.5px] text-[var(--text-2)]">Here&apos;s what&apos;s happening with your training today.</p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="rounded-full gap-1.5 px-3 py-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Streak: 12 days
-              </Badge>
               <Link href="/learn"><Button size="sm" className="rounded-[8px]">Continue</Button></Link>
             </div>
           </div>
@@ -98,18 +127,26 @@ export default function DashboardPage() {
                   <BookOpen className="w-3.5 h-3.5" aria-hidden="true" /> Research
                 </Button>
               </Link>
-              <span className="ml-auto hidden lg:inline text-[11px] text-[var(--text-3)] shrink-0">Jump to where you left off • <Link href="/labs/sql-injection" className="font-medium text-[var(--text-2)] hover:text-[var(--text)] underline decoration-[var(--border-strong)] underline-offset-4">SQL Injection Lab</Link></span>
+              <span className="ml-auto hidden lg:inline text-[11px] text-[var(--text-3)] shrink-0">Jump to where you left off</span>
             </CardContent>
           </Card>
         </FadeIn>
 
         {/* Stats - animated with anime.js stagger + count-up */}
         <Stagger className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-          <div className="stagger-item"><Stat label="XP" value={1240} sub="+120 this week" /></div>
-          <div className="stagger-item"><Stat label="Reputation" value={8841} sub="Reputation Rank #3 • Top 1%" /></div>
-          <div className="stagger-item"><Stat label="Labs completed" value={24} sub="6 in progress" /></div>
-          <div className="stagger-item"><Stat label="Challenges solved" value={76} sub="12 this month" /></div>
-          <div className="stagger-item"><Stat label="Global rank" value={247} sub="↑ 12 positions • Global" prefix="#" /></div>
+          <div className="stagger-item"><Stat label="XP" value={0} sub="Complete labs to earn XP" /></div>
+          <div className="stagger-item"><Stat label="Reputation" value={user?.reputation ?? 0} sub="Based on your activity" /></div>
+          <div className="stagger-item"><Stat label="Labs completed" value={real.completed} sub="Across all labs" /></div>
+          <div className="stagger-item"><Stat label="Challenges solved" value={solvedCount} sub="Across all challenges" /></div>
+          <div className="stagger-item">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-[11px] font-semibold tracking-widest uppercase text-[var(--text-3)]">Plan</div>
+                <div className="mt-1 text-[20px] font-[700] tracking-[-0.03em] text-[var(--text)]">{planLabel}</div>
+                <div className="text-[11px] text-[var(--text-2)]"><Link href="/settings/billing" className="hover:underline">Manage billing</Link></div>
+              </CardContent>
+            </Card>
+          </div>
         </Stagger>
 
         <div className="grid lg:grid-cols-[1.7fr_1fr] gap-6">
@@ -132,8 +169,8 @@ export default function DashboardPage() {
                           <BookOpen className="w-4 h-4" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-[13.5px] font-[600] tracking-[-0.015em]">Web Application Security</h3>
-                          <div className="text-[12px] text-[var(--text-2)]">Intermediate • 32 lessons • 28h estimated</div>
+                          <h3 className="text-[13.5px] font-[600] tracking-[-0.015em]">Continue your learning</h3>
+                          <div className="text-[12px] text-[var(--text-2)]">Pick up a path in the Academy and work through video lessons.</div>
                           <div className="mt-2 flex items-center gap-2">
                             <div className="flex-1 max-w-[180px] w-full h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)] shrink-0" role="progressbar" aria-valuenow={progressLoading ? undefined : real.pct} aria-valuemin={0} aria-valuemax={100} aria-label="Course progress">
                               {progressLoading ? (
@@ -152,7 +189,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <Link href="/learn/web-security"><Button size="sm" className="shrink-0 rounded-[8px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-900 dark:border-zinc-700 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Continue <ArrowRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" /></Button></Link>
+                      <Link href="/learn"><Button size="sm" className="shrink-0 rounded-[8px] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-900 dark:border-zinc-700 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Continue <ArrowRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" /></Button></Link>
                     </div>
                   </div>
 
@@ -163,14 +200,10 @@ export default function DashboardPage() {
                         <FlaskConical className="w-4 h-4" aria-hidden="true" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-[600]">Linux Privilege Escalation</div>
-                        <div className="text-[12px] text-[var(--text-2)]">Enumerate and exploit misconfigurations — 90 min • 7 objectives • Not started</div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[11px] bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">Lab</Badge>
-                          <span className="text-[11px] text-[var(--text-3)]">Not started • 90 min • Next in path</span>
-                        </div>
+                        <div className="text-[13px] font-[600]">Start a hands-on lab</div>
+                        <div className="text-[12px] text-[var(--text-2)]">Isolated environments with objectives and server-side flag checks.</div>
                       </div>
-                      <Link href="/labs/lab-2"><Button size="sm" variant="secondary" className="shrink-0 rounded-[8px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Start <ArrowRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" /></Button></Link>
+                      <Link href="/labs"><Button size="sm" variant="secondary" className="shrink-0 rounded-[8px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 h-11 sm:h-8 min-h-[44px] sm:min-h-0">Browse labs <ArrowRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" /></Button></Link>
                     </div>
                   </div>
                 </CardContent>
@@ -227,6 +260,12 @@ export default function DashboardPage() {
                   <Badge variant="secondary">{challenges.filter(c=>c.status==="solved").length} solved</Badge>
                 </CardHeader>
                 <CardContent>
+                  {challenges.length === 0 ? (
+                    <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] text-center col-span-full">
+                      <div className="text-[12px] font-[600]">No challenges published yet</div>
+                      <div className="text-[11px] text-[var(--text-2)] mt-0.5">New challenges will appear here when published.</div>
+                    </div>
+                  ) : (
                   <Stagger className="grid grid-cols-1 sm:grid-cols-2 gap-2" selector=".stagger-item">
                     {challenges.slice(0,4).map(c => (
                       <div key={c.id} className="stagger-item p-3 rounded-[10px] border border-[var(--border)] flex items-center gap-3">
@@ -241,6 +280,7 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </Stagger>
+                  )}
                 </CardContent>
               </Card>
             </FadeIn>
@@ -256,7 +296,12 @@ export default function DashboardPage() {
                   <CardDescription>Track advancement across core domains.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {skillProgress.map(s => (
+                  {skillProgress.length === 0 ? (
+                    <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] text-center">
+                      <div className="text-[12px] font-[600]">No skill activity yet</div>
+                      <div className="text-[11px] text-[var(--text-2)] mt-0.5">Complete labs to build your skill map.</div>
+                    </div>
+                  ) : skillProgress.map(s => (
                     <div key={s.name}>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[12.5px] font-[500]">{s.name}</span>
@@ -281,16 +326,13 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[24px] font-[700] tracking-[-0.03em]"><CountUp value={8841} /></span>
-                    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">+142 this week</span>
+                    <span className="text-[24px] font-[700] tracking-[-0.03em]"><CountUp value={user?.reputation ?? 0} /></span>
                   </div>
                   <div className="mt-3 space-y-2 text-[12px]">
-                    <div className="flex justify-between"><span className="text-[var(--text-2)]">Labs</span><span className="font-mono"><CountUp value={64} /></span></div>
-                    <div className="flex justify-between"><span className="text-[var(--text-2)]">Challenges</span><span className="font-mono"><CountUp value={38} /></span></div>
-                    <div className="flex justify-between"><span className="text-[var(--text-2)]">Research</span><span className="font-mono"><CountUp value={24} /></span></div>
-                    <div className="flex justify-between"><span className="text-[var(--text-2)]">Community</span><span className="font-mono"><CountUp value={16} /></span></div>
+                    <div className="flex justify-between"><span className="text-[var(--text-2)]">Labs completed</span><span className="font-mono"><CountUp value={real.completed} /></span></div>
+                    <div className="flex justify-between"><span className="text-[var(--text-2)]">Challenges solved</span><span className="font-mono"><CountUp value={solvedCount} /></span></div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-[var(--border)] text-[11px] text-[var(--text-3)]">Every change is explainable. No trivial activity dominates the score.</div>
+                  <div className="mt-3 pt-3 border-t border-[var(--border)] text-[11px] text-[var(--text-3)]">Reputation grows as you complete labs, solve challenges, and publish research.</div>
                 </CardContent>
               </Card>
             </FadeIn>
@@ -302,20 +344,10 @@ export default function DashboardPage() {
                   <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Award className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Recent achievements</h2>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {[
-                    { title: "SQL Injection Master", desc: "Completed all Web SQL labs", time: "2 hours ago", icon: "🎯" },
-                    { title: "First Research Published", desc: "Your writeup was featured", time: "Yesterday", icon: "📄" },
-                    { title: "7-Day Streak", desc: "Consistent daily practice", time: "3 days ago", icon: "🔥" },
-                  ].map(a => (
-                    <div key={a.title} className="flex gap-3 p-2.5 rounded-[10px] bg-[var(--surface-2)] border border-[var(--border)]">
-                      <div className="w-8 h-8 rounded-[8px] bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[14px] shrink-0" aria-hidden="true">{a.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12.5px] font-[600] leading-none">{a.title}</div>
-                        <div className="text-[11px] text-[var(--text-2)]">{a.desc}</div>
-                        <div className="text-[11px] text-[var(--text-3)] mt-1 flex items-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" />{a.time}</div>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] text-center">
+                    <div className="text-[12px] font-[600]">No achievements yet</div>
+                    <div className="text-[11px] text-[var(--text-2)] mt-0.5">Complete labs and challenges to earn them.</div>
+                  </div>
                 </CardContent>
               </Card>
             </FadeIn>
@@ -327,15 +359,20 @@ export default function DashboardPage() {
                   <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Calendar className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Upcoming</h2>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="p-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-                    <h3 className="text-[12.5px] font-[600]">Winter CTF 2026</h3>
-                    <div className="text-[11px] text-[var(--text-2)]">Team competition • 48 hours • Starts in 6 days</div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Badge variant="accent" className="text-[11px]">Registered</Badge>
-                      <span className="text-[11px] text-[var(--text-3)]">Red Team — Atlas</span>
+                  {upcomingEvents.length === 0 ? (
+                    <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] text-center">
+                      <div className="text-[12px] font-[600]">No upcoming events</div>
+                      <div className="text-[11px] text-[var(--text-2)] mt-0.5">New competitions will appear here when scheduled.</div>
                     </div>
-                  </div>
-                  <UpcomingReserveCard />
+                  ) : upcomingEvents.map(ev => (
+                    <div key={ev.id} className="p-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+                      <h3 className="text-[12.5px] font-[600]">{ev.title}</h3>
+                      <div className="text-[11px] text-[var(--text-2)]">{ev.date}</div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Badge variant={ev.status === "Live" ? "accent" : "secondary"} className="text-[11px]">{ev.status}</Badge>
+                      </div>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             </FadeIn>
@@ -348,8 +385,7 @@ export default function DashboardPage() {
             <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 gap-4">
               <h2 className="flex items-center gap-2 text-[14px] font-[600]"><Shield className="w-4 h-4 text-[var(--text-3)]" aria-hidden="true" /> Threat intel — Recent CVEs</h2>
               <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex">Source: NVD • Updated 2h ago</Badge>
-                <Link href="/research" className="text-[12px] font-medium text-[var(--accent)] hover:underline hidden sm:inline-flex items-center gap-1">View intel <ExternalLink className="w-3 h-3" aria-hidden="true" /></Link>
+                <Link href="/cve" className="text-[12px] font-medium text-[var(--accent)] hover:underline hidden sm:inline-flex items-center gap-1">View intel <ExternalLink className="w-3 h-3" aria-hidden="true" /></Link>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -366,40 +402,23 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
-                    <tr className="hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 font-mono text-[12.5px] font-medium whitespace-nowrap">CVE-2024-3400</td>
-                      <td className="px-4 py-3 text-[13px] leading-5 max-w-[360px]"><span className="font-[500]">PAN-OS GlobalProtect</span> <span className="text-[var(--text-2)]">— command injection, unauthenticated RCE via crafted session</span></td>
-                      <td className="px-4 py-3"><Badge variant="secondary" className="bg-zinc-900 text-white border-zinc-800 dark:bg-zinc-800 text-[11px]">Critical</Badge></td>
-                      <td className="px-4 py-3"><Badge variant="success" className="text-[11px]">Patch available</Badge></td>
-                      <td className="px-4 py-3 text-[11px] font-mono text-[var(--text-3)] hidden sm:table-cell">2024-04-12</td>
-                    </tr>
-                    <tr className="hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 font-mono text-[12.5px] font-medium whitespace-nowrap">CVE-2024-3094</td>
-                      <td className="px-4 py-3 text-[13px] leading-5 max-w-[360px]"><span className="font-[500]">XZ Utils liblzma</span> <span className="text-[var(--text-2)]">— backdoor in 5.6.0/5.6.1, SSH auth bypass via build script</span></td>
-                      <td className="px-4 py-3"><Badge variant="secondary" className="bg-zinc-900 text-white border-zinc-800 dark:bg-zinc-800 text-[11px]">Critical</Badge></td>
-                      <td className="px-4 py-3"><Badge variant="outline" className="text-[11px]">Mitigated</Badge></td>
-                      <td className="px-4 py-3 text-[11px] font-mono text-[var(--text-3)] hidden sm:table-cell">2024-03-29</td>
-                    </tr>
-                    <tr className="hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 font-mono text-[12.5px] font-medium whitespace-nowrap">CVE-2024-21626</td>
-                      <td className="px-4 py-3 text-[13px] leading-5 max-w-[360px]"><span className="font-[500]">runc</span> <span className="text-[var(--text-2)]">— container escape via leaked file descriptor, host file overwrite</span></td>
-                      <td className="px-4 py-3"><Badge variant="secondary" className="bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900 text-[11px]">High</Badge></td>
-                      <td className="px-4 py-3"><Badge variant="success" className="text-[11px]">Patch available</Badge></td>
-                      <td className="px-4 py-3 text-[11px] font-mono text-[var(--text-3)] hidden sm:table-cell">2024-01-31</td>
-                    </tr>
-                    <tr className="hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 font-mono text-[12.5px] font-medium whitespace-nowrap">CVE-2023-44487</td>
-                      <td className="px-4 py-3 text-[13px] leading-5 max-w-[360px]"><span className="font-[500]">HTTP/2 Rapid Reset</span> <span className="text-[var(--text-2)]">— DoS via stream cancellation, widespread server impact</span></td>
-                      <td className="px-4 py-3"><Badge variant="secondary" className="bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900 text-[11px]">High</Badge></td>
-                      <td className="px-4 py-3"><Badge variant="outline" className="text-[11px]">Monitoring</Badge></td>
-                      <td className="px-4 py-3 text-[11px] font-mono text-[var(--text-3)] hidden sm:table-cell">2023-10-10</td>
-                    </tr>
+                    {cves.length === 0 ? (
+                      <tr><td colSpan={5} className="px-4 py-6 text-center text-[12px] text-[var(--text-2)]">No advisories published yet.</td></tr>
+                    ) : cves.map(c => (
+                      <tr key={c.id} className="hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="px-4 py-3 font-mono text-[12.5px] font-medium whitespace-nowrap">{c.cveId}</td>
+                        <td className="px-4 py-3 text-[13px] leading-5 max-w-[360px]">{c.title}</td>
+                        <td className="px-4 py-3"><Badge variant="secondary" className="text-[11px]">{c.severity}</Badge></td>
+                        <td className="px-4 py-3"><Badge variant="outline" className="text-[11px]">{c.status}</Badge></td>
+                        <td className="px-4 py-3 text-[11px] font-mono text-[var(--text-3)] hidden sm:table-cell">{c.published}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
               <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--surface-2)]/50 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                <span className="text-[var(--text-3)]">Showing 4 of 12 tracked • Sorted by severity • Restrained signal only</span>
-                <Link href="/research" className="font-medium text-[var(--text-2)] hover:text-[var(--text)] inline-flex items-center gap-1">Open intel feed <ArrowRight className="w-3 h-3" aria-hidden="true" /></Link>
+                <span className="text-[var(--text-3)]">Sorted by severity • Curated advisories</span>
+                <Link href="/cve" className="font-medium text-[var(--text-2)] hover:text-[var(--text)] inline-flex items-center gap-1">Open intel feed <ArrowRight className="w-3 h-3" aria-hidden="true" /></Link>
               </div>
             </CardContent>
           </Card>
@@ -413,23 +432,9 @@ export default function DashboardPage() {
               <span className="text-[11px] text-[var(--text-3)]">Last 7 days</span>
             </CardHeader>
             <CardContent>
-              <div className="divide-y divide-[var(--border)]">
-                {[
-                  { action: "Completed lab", target: "Network Traffic Analysis", meta: "Earned 120 XP • 2 hours ago", color: "bg-emerald-500", href: "/labs/lab-6" },
-                  { action: "Solved challenge", target: "Auth Bypass (Web • 100 pts)", meta: "First blood bonus • 5 hours ago", color: "bg-blue-500", href: "/challenges/ch-1" },
-                  { action: "Published research", target: "Abusing IAM Trust Policies", meta: "12 bookmarks in 24h • Yesterday", color: "bg-purple-500", href: "/research/1" },
-                  { action: "Joined team", target: "Red Team — Atlas activity", meta: "Team rank improved to #12 • 2 days ago", color: "bg-amber-500", href: "/teams" },
-                  { action: "Earned certificate", target: "Web Security — Intermediate", meta: "Verified credential • 3 days ago", color: "bg-zinc-800", href: "/achievements" },
-                ].map((row, i) => (
-                  <div key={i} className="flex items-center gap-3 py-3">
-                    <span className={`w-1.5 h-1.5 rounded-full ${row.color} shrink-0`} aria-hidden="true" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[13px] text-[var(--text-2)]">{row.action}</span> <span className="text-[13px] font-[550] text-[var(--text)]">{row.target}</span>
-                      <div className="text-[11px] text-[var(--text-3)]">{row.meta}</div>
-                    </div>
-                    <ChevronLink href={row.href} label={`Open ${row.target}`} />
-                  </div>
-                ))}
+              <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] text-center">
+                <div className="text-[12px] font-[600]">No recent activity</div>
+                <div className="text-[11px] text-[var(--text-2)] mt-0.5">Start a lab or solve a challenge — your activity will show here.</div>
               </div>
             </CardContent>
           </Card>
@@ -451,25 +456,4 @@ function Stat({ label, value, sub, accent, prefix = "" }: { label: string, value
       </CardContent>
     </Card>
   )
-}
-
-function UpcomingReserveCard(){
-  const [reserved,setReserved]=React.useState(false)
-  React.useEffect(()=>{ try{ setReserved(localStorage.getItem("aegis_event_soc_reserved")==="1")}catch{}},[])
-  const toggle=()=>{
-    const n=!reserved
-    setReserved(n)
-    try{ localStorage.setItem("aegis_event_soc_reserved", n?"1":"0")}catch{}
-  }
-  return (
-    <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] text-center">
-      <div className="text-[12px] font-medium">SOC Simulation — Feb 22</div>
-      <div className="text-[11px] text-[var(--text-2)]">Live detection engineering workshop {reserved && <span className="text-emerald-600">• Reserved</span>}</div>
-      <Button size="sm" variant={reserved?"default":"secondary"} className="mt-2 h-9 sm:h-7 min-h-[36px] sm:min-h-0 text-[12px]" onClick={toggle} aria-pressed={reserved} aria-label={reserved ? "Cancel reservation for SOC Simulation" : "Reserve seat for SOC Simulation"}>{reserved?"✓ Reserved — Cancel?":"Reserve seat"}</Button>
-    </div>
-  )
-}
-
-function ChevronLink({ href, label }: { href: string, label: string }) {
-  return <Link href={href} aria-label={label} className="w-9 h-9 sm:w-7 sm:h-7 min-h-[36px] sm:min-h-0 min-w-[36px] sm:min-w-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer"><ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /></Link>
 }

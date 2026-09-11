@@ -12,14 +12,16 @@ import { getOrCreateCsrfToken, validateCsrfToken } from "@/lib/csrf"
 import { useAuth } from "@/components/auth-provider"
 import {
   Users, FlaskConical, Trophy, FileText, Shield, AlertTriangle, Activity, Settings, Video, Calendar, Newspaper,
-  Plus, Trash2, Edit2, Search, Save, X, Eye, Ban, CheckCircle2, Upload, Star
+  Plus, Trash2, Edit2, Search, Save, X, Eye, Ban, CheckCircle2, Upload, Star, MessageSquare, Send
 } from "lucide-react"
 
 type AdminUser = { id: string; username: string; email: string; reputation: number; status: "Active" | "Pending" | "Banned"; role: "user" | "admin" | "moderator" }
-type AdminVideo = { id: string; title: string; subtitle: string; duration: string; module: string; path: string; featured: boolean }
+type AdminVideo = { id: string; title: string; subtitle: string; duration: string; module: string; path: string; featured: boolean; youtubeId: string; description: string }
 type AdminEvent = { id: string; title: string; type: "CTF" | "Workshop" | "Competition"; date: string; status: "Live" | "Upcoming" | "Ended"; participants: number }
-type AdminNews = { id: string; title: string; excerpt: string; author: string; tags: string; views: number; status: "Published" | "Draft" | "Pending" }
+type AdminNews = { id: string; title: string; excerpt: string; author: string; tags: string; views: number; status: "Published" | "Draft" | "Pending"; content: string }
 type AdminCVE = { id: string; cveId: string; title: string; severity: "Critical" | "High" | "Medium" | "Low"; status: "Published" | "Draft"; publishDate: string }
+type AdminLab = { id: string; title: string; category: string; difficulty: "Beginner" | "Intermediate" | "Advanced" | "Expert"; duration: string; description: string; objectives: number; youtubeId: string; hasFlag: boolean }
+type AdminChallenge = { id: string; name: string; category: string; difficulty: "Easy" | "Medium" | "Hard" | "Insane"; points: number; solves: number; tags: string[]; hasFlag: boolean }
 
 const TABS = [
   { id: "overview", label: "Overview", icon: Activity },
@@ -29,8 +31,24 @@ const TABS = [
   { id: "news", label: "News", icon: Newspaper },
   { id: "cve", label: "CVE", icon: Shield },
   { id: "labs", label: "Labs", icon: FlaskConical },
+  { id: "challenges", label: "Challenges", icon: Trophy },
+  { id: "inbox", label: "Inbox", icon: MessageSquare },
   { id: "system", label: "System", icon: Settings },
 ] as const
+
+async function adminApi(table: string, method: "GET" | "POST" | "PATCH" | "DELETE" = "GET", id?: string, body?: Record<string, unknown>) {
+  const url = id ? `/api/admin/${table}/${encodeURIComponent(id)}` : `/api/admin/${table}`
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : `Request failed (${res.status})`)
+  }
+  return data as { items?: Record<string, unknown>[]; item?: Record<string, unknown>; ok?: boolean }
+}
 
 export default function AdminPage() {
   const { user } = useAuth()
@@ -48,7 +66,8 @@ export default function AdminPage() {
       setCsrfToken(getOrCreateCsrfToken())
     } catch {}
   }, [])
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const [loginBusy, setLoginBusy] = React.useState(false)
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     const formToken = (e.target as HTMLFormElement).querySelector<HTMLInputElement>('input[name="csrf"]')?.value || csrfToken
     if (!validateCsrfToken(formToken)) {
@@ -61,53 +80,44 @@ export default function AdminPage() {
       return
     }
     const cleanUser = sanitizeInput(adminUser, 64).trim()
-    // =========================================================================
-    // SECURITY: This client gate is UI-only. Production MUST validate via
-    // server route POST /api/admin/login which checks ADMIN_PASS (server-only,
-    // never NEXT_PUBLIC) and sets httpOnly cookie `aegis_admin_session`.
-    // `src/middleware.ts` then guards /admin and /api/admin/* by that cookie.
-    // Do NOT use process.env.NEXT_PUBLIC_ADMIN_PASS — it leaks to browser.
-    // We keep a client check only for demo/offline dev, comparing against a
-    // server-injected hash placeholder (window.__ADMIN_HASH__) if present,
-    // otherwise a placeholder length check. Server is authoritative.
-    // =========================================================================
-    const serverHash =
-      typeof window !== "undefined"
-        ? (window as unknown as { __ADMIN_HASH__?: string }).__ADMIN_HASH__ || ""
-        : ""
-    let isAuthed = false
-    if (serverHash) {
-      // Placeholder: if server injected a hash, require non-empty password and correct user.
-      // Real verification happens server-side; this avoids shipping the secret to the bundle.
-      isAuthed = cleanUser === "admin" && adminPass.length > 0
-    } else {
-      // Demo fallback — do NOT ship real secret. Require 8+ chars so empty pass never passes.
-      // In production this branch should be replaced by fetch('/api/admin/login', ...) + middleware.
-      isAuthed = cleanUser === "admin" && adminPass.length >= 8
+    if (!cleanUser || !adminPass) {
+      setLoginError("Username and password are required.")
+      return
     }
-    if (isAuthed) {
+    setLoginBusy(true)
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: cleanUser, password: adminPass }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        adminLoginLimiter.record(false)
+        const remaining = adminLoginLimiter.check().remaining
+        setLoginError(`${typeof body.error === "string" ? body.error : "Invalid username or password."} Attempts left: ${remaining}.`)
+        return
+      }
       try {
-        // Demo: set a short-lived session cookie so middleware guard passes in dev.
-        // In production the server sets httpOnly, Secure, SameSite=Strict cookie.
-        document.cookie = `aegis_admin_session=demo-${Date.now()}; Path=/; SameSite=Strict; Max-Age=3600`
         localStorage.setItem("aegis_admin_auth", "1")
         adminLoginLimiter.reset()
       } catch {}
       setIsAdminAuthed(true)
       setLoginError("")
-    } else {
-      adminLoginLimiter.record(false)
-      const remaining = adminLoginLimiter.check().remaining
-      setLoginError(`Invalid username or password. Attempts left: ${remaining}.`)
+    } catch {
+      setLoginError("Could not reach the server. Check your connection.")
+    } finally {
+      setLoginBusy(false)
     }
   }
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" })
+    } catch {}
     try {
       localStorage.removeItem("aegis_admin_auth")
       sessionStorage.removeItem("aegis_csrf_token")
       document.cookie = "aegis_csrf_token=; Path=/; Max-Age=0; SameSite=Strict"
-      // Clear admin session cookie (best-effort for non-httpOnly demo cookie;
-      // production httpOnly cookie must be cleared by server route /api/admin/logout)
       document.cookie = "aegis_admin_session=; Path=/; Max-Age=0; SameSite=Strict"
     } catch {}
     setIsAdminAuthed(false)
@@ -125,74 +135,80 @@ export default function AdminPage() {
   const [active, setActive] = React.useState<typeof TABS[number]["id"]>("overview")
   const [search, setSearch] = React.useState("")
 
-  const [users, setUsers] = React.useState<AdminUser[]>(() => {
-    if (typeof window !== "undefined") {
-      try { const s = localStorage.getItem("aegis_admin_users"); if (s) return JSON.parse(s) } catch {}
-    }
-    return []
-  })
+  const [users, setUsers] = React.useState<AdminUser[]>([])
   const [editingUser, setEditingUser] = React.useState<AdminUser | null>(null)
   const [showAddUser, setShowAddUser] = React.useState(false)
-  const [newUser, setNewUser] = React.useState<Partial<AdminUser>>({ username: "", email: "", role: "user", status: "Active" })
+  const [newUser, setNewUser] = React.useState<Partial<AdminUser> & { password?: string }>({ username: "", email: "", role: "user", status: "Active", password: "" })
 
-  const [videos, setVideos] = React.useState<AdminVideo[]>(() => {
-    if (typeof window !== "undefined") {
-      try { const s = localStorage.getItem("aegis_admin_videos"); if (s) return JSON.parse(s) } catch {}
-    }
-    return []
-  })
+  const [videos, setVideos] = React.useState<AdminVideo[]>([])
   const [editingVideo, setEditingVideo] = React.useState<AdminVideo | null>(null)
   const [showAddVideo, setShowAddVideo] = React.useState(false)
-  const [newVideo, setNewVideo] = React.useState<Partial<AdminVideo>>({ title: "", subtitle: "", duration: "", module: "", path: "" })
+  const [newVideo, setNewVideo] = React.useState<Partial<AdminVideo>>({ title: "", subtitle: "", duration: "", module: "", path: "", youtubeId: "", description: "" })
 
-  const [events, setEvents] = React.useState<AdminEvent[]>(() => {
-    if (typeof window !== "undefined") {
-      try { const s = localStorage.getItem("aegis_admin_events"); if (s) return JSON.parse(s) } catch {}
-    }
-    return []
-  })
+  const [events, setEvents] = React.useState<AdminEvent[]>([])
   const [editingEvent, setEditingEvent] = React.useState<AdminEvent | null>(null)
   const [showAddEvent, setShowAddEvent] = React.useState(false)
   const [newEvent, setNewEvent] = React.useState<Partial<AdminEvent>>({ title: "", type: "CTF", date: "", status: "Upcoming" })
 
-  const [news, setNews] = React.useState<AdminNews[]>(() => {
-    if (typeof window !== "undefined") {
-      try { const s = localStorage.getItem("aegis_admin_news"); if (s) return JSON.parse(s) } catch {}
-    }
-    return []
-  })
+  const [news, setNews] = React.useState<AdminNews[]>([])
   const [editingNews, setEditingNews] = React.useState<AdminNews | null>(null)
   const [showAddNews, setShowAddNews] = React.useState(false)
-  const [newNews, setNewNews] = React.useState<Partial<AdminNews>>({ title: "", excerpt: "", author: "", tags: "", status: "Draft" })
+  const [newNews, setNewNews] = React.useState<Partial<AdminNews>>({ title: "", excerpt: "", author: "", tags: "", status: "Draft", content: "" })
 
-  const [cves, setCves] = React.useState<AdminCVE[]>(() => {
-    if (typeof window !== "undefined") {
-      try { const s = localStorage.getItem("aegis_admin_cves"); if (s) return JSON.parse(s) } catch {}
-    }
-    return []
-  })
+  const [cves, setCves] = React.useState<AdminCVE[]>([])
   const [editingCVE, setEditingCVE] = React.useState<AdminCVE | null>(null)
   const [showAddCVE, setShowAddCVE] = React.useState(false)
   const [newCVE, setNewCVE] = React.useState<Partial<AdminCVE>>({ cveId: "", title: "", severity: "High", status: "Draft" })
 
-  type AdminLab = { id: string; title: string; category: string; difficulty: "Beginner"|"Intermediate"|"Advanced"; duration: string }
-  const [adminLabs, setAdminLabs] = React.useState<AdminLab[]>(()=>{
-    if(typeof window!=="undefined"){ try{ const s=localStorage.getItem("aegis_admin_labs"); if(s) return JSON.parse(s)}catch{}}
-    return []
-  })
+  const [adminLabs, setAdminLabs] = React.useState<AdminLab[]>([])
   const [showAddLab, setShowAddLab] = React.useState(false)
   const [editingLab, setEditingLab] = React.useState<AdminLab|null>(null)
-  const [newLab, setNewLab] = React.useState<Partial<AdminLab>>({title:"", category:"Web Security", difficulty:"Beginner", duration:"" })
+  const [newLab, setNewLab] = React.useState<Partial<AdminLab> & { flag?: string }>({title:"", category:"Web Security", difficulty:"Beginner", duration:"", description:"", objectives:1, youtubeId:"", flag:"" })
+
+  const [adminChallenges, setAdminChallenges] = React.useState<AdminChallenge[]>([])
+  const [showAddChallenge, setShowAddChallenge] = React.useState(false)
+  const [editingChallenge, setEditingChallenge] = React.useState<AdminChallenge|null>(null)
+  const [newChallenge, setNewChallenge] = React.useState<Partial<AdminChallenge> & { flag?: string }>({name:"", category:"Web", difficulty:"Easy", points:100, flag:"" })
+
+  type AdminMessage = { id: string; user_id: string; userEmail: string; userName: string; from_role: string; text: string; read: boolean; created_at: string }
+  const [inbox, setInbox] = React.useState<AdminMessage[]>([])
+  const [inboxUser, setInboxUser] = React.useState<string | null>(null)
+  const [replyDraft, setReplyDraft] = React.useState("")
+
   const [maintenance, setMaintenance] = React.useState(false)
   const [announcement, setAnnouncement] = React.useState("")
-  React.useEffect(()=>{ try{ const v=localStorage.getItem("aegis_maintenance"); if(v) setMaintenance(v==="1"); const a=localStorage.getItem("aegis_announcement"); if(a) setAnnouncement(a)}catch{}},[])
+  const [dataLoading, setDataLoading] = React.useState(false)
+  const [dataError, setDataError] = React.useState<string | null>(null)
 
-  React.useEffect(() => { try { localStorage.setItem("aegis_admin_users", JSON.stringify(users)) } catch {} }, [users])
-  React.useEffect(() => { try { localStorage.setItem("aegis_admin_videos", JSON.stringify(videos)) } catch {} }, [videos])
-  React.useEffect(() => { try { localStorage.setItem("aegis_admin_events", JSON.stringify(events)) } catch {} }, [events])
-  React.useEffect(() => { try { localStorage.setItem("aegis_admin_news", JSON.stringify(news)) } catch {} }, [news])
-  React.useEffect(() => { try { localStorage.setItem("aegis_admin_cves", JSON.stringify(cves)) } catch {} }, [cves])
-  React.useEffect(()=>{ try{ localStorage.setItem("aegis_admin_labs", JSON.stringify(adminLabs))}catch{}},[adminLabs])
+  const loadAll = React.useCallback(async () => {
+    setDataLoading(true)
+    setDataError(null)
+    try {
+      const [u, v, e, n, c, l, ch, s, m] = await Promise.all([
+        adminApi("users"), adminApi("videos"), adminApi("events"), adminApi("news"),
+        adminApi("cves"), adminApi("labs"), adminApi("challenges"), adminApi("settings"), adminApi("messages"),
+      ])
+      setUsers((u.items ?? []) as unknown as AdminUser[])
+      setVideos((v.items ?? []) as unknown as AdminVideo[])
+      setEvents((e.items ?? []) as unknown as AdminEvent[])
+      setNews((n.items ?? []) as unknown as AdminNews[])
+      setCves((c.items ?? []) as unknown as AdminCVE[])
+      setAdminLabs((l.items ?? []) as unknown as AdminLab[])
+      setAdminChallenges((ch.items ?? []) as unknown as AdminChallenge[])
+      setInbox((m.items ?? []) as unknown as AdminMessage[])
+      const settings = Object.fromEntries(((s.items ?? []) as { key: string; value: string }[]).map(x => [x.key, x.value]))
+      setAnnouncement(settings.announcement ?? "")
+      setMaintenance(settings.maintenance === "1")
+    } catch (err) {
+      setDataError(err instanceof Error ? err.message : "Failed to load admin data")
+    } finally {
+      setDataLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (isAdminAuthed) loadAll()
+  }, [isAdminAuthed, loadAll])
 
   const filteredUsers = users.filter(u => !search || u.username.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
   const filteredVideos = videos.filter(v => !search || v.title.toLowerCase().includes(search.toLowerCase()))
@@ -209,15 +225,12 @@ export default function AdminPage() {
             <h1 className="mt-4 text-center text-[20px] font-[700] tracking-tight">Admin Login</h1>
             <p className="text-center text-[13px] text-[var(--text-2)] mt-1">Aegis Platform — Admin Control</p>
             <p className="text-center text-[11px] text-[var(--text-3)] mt-1">Login required — separate page, not auto open</p>
-            <div className="mt-4 p-3 rounded-[8px] bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-900">
-              <span className="font-semibold">Security:</span> Client check is UI-only. Production verifies <code className="font-mono">ADMIN_PASS</code> server-side (never <code className="font-mono">NEXT_PUBLIC_</code>) and guards <code className="font-mono">/admin</code> via <code className="font-mono">aegis_admin_session</code> httpOnly cookie + <code className="font-mono">middleware.ts</code>. See server logs for authoritative auth.
-            </div>
             {loginError && <div className="mt-4 p-3 rounded-[8px] bg-red-50 border border-red-200 text-[13px] text-red-700">{escapeHtml(loginError)}</div>}
             <form onSubmit={handleAdminLogin} className="mt-6 space-y-4">
               <input type="hidden" name="csrf" value={csrfToken} />
               <div><label className="text-[12px] font-medium">Username</label><Input value={adminUser} onChange={e=>setAdminUser(e.target.value)} placeholder="admin" required className="mt-1 h-10 bg-[var(--surface)]" autoComplete="username" /></div>
               <div><label className="text-[12px] font-medium">Password</label><Input type="password" value={adminPass} onChange={e=>setAdminPass(e.target.value)} placeholder="••••••••" required className="mt-1 h-10 bg-[var(--surface)]" autoComplete="current-password" /></div>
-              <Button type="submit" className="w-full h-10 rounded-[8px] bg-zinc-900 text-white font-[600]">Log in to Admin</Button>
+              <Button type="submit" disabled={loginBusy} className="w-full h-10 rounded-[8px] bg-zinc-900 text-white font-[600]">{loginBusy ? "Verifying..." : "Log in to Admin"}</Button>
               <p className="text-center text-[11px] text-amber-600">Rate limited: 5 attempts / 15 min per IP • CSRF protected</p>
             </form>
             <div className="mt-6 pt-4 border-t text-center">
@@ -286,6 +299,12 @@ export default function AdminPage() {
         </div>
 
         {/* Overview */}
+        {dataLoading && (
+          <Card className="mb-6"><CardContent className="p-4 text-[13px] text-[var(--text-2)]">Loading platform data…</CardContent></Card>
+        )}
+        {dataError && (
+          <Card className="mb-6 border-red-200"><CardContent className="p-4 text-[13px] text-red-700">Failed to load data: {dataError} <Button size="sm" variant="secondary" className="ml-2 h-7" onClick={loadAll}>Retry</Button></CardContent></Card>
+        )}
         {active==="overview" && (
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
@@ -312,9 +331,7 @@ export default function AdminPage() {
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Activity className="w-4 h-4" /> Audit logs</CardTitle></CardHeader>
                 <CardContent className="space-y-2 text-[12px]">
-                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"><span className="truncate">sophiachen published research <b>IAM Trust Policies</b></span><span className="text-[11px] font-mono text-[var(--text-3)] shrink-0">2h ago</span></div>
-                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-[8px] border border-[var(--border)] bg-[var(--surface)]"><span className="truncate">admin updated video <b>Recon</b></span><span className="text-[11px] font-mono text-[var(--text-3)] shrink-0">5h ago • RBAC: allowed</span></div>
-                  <div className="flex items-center justify-between gap-3 p-2.5 rounded-[8px] border border-amber-200 bg-amber-50 dark:bg-amber-950/20"><span className="flex items-center gap-1.5 truncate text-amber-900 dark:text-amber-200"><AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" /> rate limit hit for 192.0.2.1</span><span className="text-[11px] font-mono text-amber-700 shrink-0">429 • 1 min ago</span></div>
+                  <div className="p-3 rounded-[8px] border border-dashed border-[var(--border)] text-center text-[var(--text-2)]">No audit events yet. Admin actions will be logged here.</div>
                 </CardContent>
               </Card>
             </div>
@@ -331,9 +348,9 @@ export default function AdminPage() {
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Settings className="w-4 h-4" /> System</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="w-full sm:w-auto"><label className="text-[12px] font-medium">Announcement</label><Input placeholder="Enter announcement..." className="mt-1.5 h-9 bg-[var(--surface)]" id="announcement" /></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 px-4 w-full" onClick={()=>alert("Announcement published (localStorage)")}>Publish announcement</Button>
-                  <div className="text-[11px] text-[var(--text-3)] pt-2 border-t">RBAC, rate limiting, secure headers enforced. Lab isolation: containers/K8s ready.</div>
+                  <div className="text-[12px] text-[var(--text-2)]">Platform settings live under the <b>System</b> tab — announcement banner and maintenance mode, stored in the database.</div>
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 px-4 w-full" onClick={()=>setActive("system")}>Open System settings</Button>
+                  <div className="text-[11px] text-[var(--text-3)] pt-2 border-t">RBAC, rate limiting, secure headers enforced.</div>
                 </CardContent>
               </Card>
             </div>
@@ -360,8 +377,21 @@ export default function AdminPage() {
                         <td className="px-4 py-3"><Badge className={`text-[11px] border ${u.status==="Active" ? "bg-emerald-600 text-white border-emerald-600" : u.status==="Banned" ? "bg-red-600 text-white border-red-600" : "bg-amber-100 text-amber-900 border-amber-200"}`}>{u.status}</Badge></td>
                         <td className="px-4 py-3 text-right flex justify-end gap-1.5">
                           <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingUser(u)}><Edit2 className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setUsers(prev=>prev.map(x=>x.id===u.id? {...x, status: x.status==="Banned"?"Active":"Banned"}:x))}><Ban className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={()=>setUsers(prev=>prev.filter(x=>x.id!==u.id))}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            try {
+                              await adminApi("users", "PATCH", u.id, { status: u.status==="Banned"?"Active":"Banned" })
+                              setUsers(prev=>prev.map(x=>x.id===u.id? {...x, status: x.status==="Banned"?"Active":"Banned"}:x))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Ban className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            if(!confirm(`Delete user "${u.username}"?`)) return
+                            try {
+                              await adminApi("users", "DELETE", u.id)
+                              setUsers(prev=>prev.filter(x=>x.id!==u.id))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </td>
                       </tr>
                     ))}
@@ -374,14 +404,19 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Username</label><Input value={newUser.username} onChange={e=>setNewUser({...newUser,username:e.target.value})} placeholder="username" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Email</label><Input value={newUser.email} onChange={e=>setNewUser({...newUser,email:e.target.value})} placeholder="email" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[180px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Role</label><select value={newUser.role} onChange={e=>setNewUser({...newUser,role:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 text-[13px] mt-1"><option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 gap-1" onClick={()=>{
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Password</label><Input type="password" value={newUser.password||""} onChange={e=>setNewUser({...newUser,password:e.target.value})} placeholder="min 8 chars" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" autoComplete="new-password" /></div>
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 gap-1" onClick={async ()=>{
                     if(!requireAdmin()) return
                     const cleanName = sanitizeInput(newUser.username||"", 32)
                     const cleanEmail = sanitizeEmail(newUser.email||"")
                     if(!cleanName || !cleanEmail) return alert("Fill valid username/email")
+                    if(!newUser.password || newUser.password.length < 8) return alert("Password required (min 8 characters)")
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
-                    setUsers([...users,{id:Date.now().toString(),username:cleanName,email:cleanEmail,reputation:0,status:"Active",role: (["user","moderator","admin"].includes(newUser.role as string) ? newUser.role : "user") as any }])
-                    setShowAddUser(false); setNewUser({username:"",email:"",role:"user",status:"Active"})
+                    try {
+                      const data = await adminApi("users", "POST", undefined, { username: cleanName, email: cleanEmail, password: newUser.password, role: (["user","moderator","admin"].includes(newUser.role as string) ? newUser.role : "user") })
+                      setUsers([...users, data.item as unknown as AdminUser])
+                      setShowAddUser(false); setNewUser({username:"",email:"",role:"user",status:"Active",password:""})
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5" /> Save</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddUser(false)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -393,7 +428,7 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Email</label><Input value={editingUser.email} onChange={e=>setEditingUser({...editingUser,email:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[180px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Reputation</label><Input type="number" value={editingUser.reputation} onChange={e=>setEditingUser({...editingUser,reputation:parseInt(e.target.value)||0})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[100px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Role</label><select value={editingUser.role} onChange={e=>setEditingUser({...editingUser,role:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     const clean: AdminUser = {
@@ -402,7 +437,10 @@ export default function AdminPage() {
                       email: sanitizeEmail(editingUser.email) || editingUser.email,
                       role: (["user","moderator","admin"].includes(editingUser.role) ? editingUser.role : "user"),
                     }
-                    setUsers(users.map(u=>u.id===clean.id? clean: u)); setEditingUser(null)
+                    try {
+                      await adminApi("users", "PATCH", clean.id, { username: clean.username, email: clean.email, reputation: clean.reputation, role: clean.role })
+                      setUsers(users.map(u=>u.id===clean.id? clean: u)); setEditingUser(null)
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingUser(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -431,11 +469,22 @@ export default function AdminPage() {
                         <td className="px-4 py-3">{v.featured ? <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> : <span className="text-[11px] text-[var(--text-3)]">—</span>}</td>
                         <td className="px-4 py-3 text-right flex justify-end gap-1.5">
                           <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingVideo(v)}><Edit2 className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setVideos(videos.map(x=>x.id===v.id? {...x,featured:!x.featured}:x))}><Star className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={()=>{
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            try {
+                              await adminApi("videos", "PATCH", v.id, { featured: !v.featured })
+                              setVideos(videos.map(x=>x.id===v.id? {...x,featured:!x.featured}:x))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Star className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{
                             if(!requireAdmin()) return
                             if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
-                            if(confirm(`Delete video "${v.title}"?`)) setVideos(videos.filter(x=>x.id!==v.id))
+                            if(confirm(`Delete video "${v.title}"?`)) {
+                              try {
+                                await adminApi("videos", "DELETE", v.id)
+                                setVideos(videos.filter(x=>x.id!==v.id))
+                              } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                            }
                           }}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </td>
                       </tr>
@@ -449,7 +498,8 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Module</label><Input value={newVideo.module} onChange={e=>setNewVideo({...newVideo,module:e.target.value})} placeholder="Module" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={newVideo.duration} onChange={e=>setNewVideo({...newVideo,duration:e.target.value})} placeholder="08:12" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Path</label><Input value={newVideo.path} onChange={e=>setNewVideo({...newVideo,path:e.target.value})} placeholder="networking" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={newVideo.youtubeId||""} onChange={e=>setNewVideo({...newVideo,youtubeId:e.target.value})} placeholder="dQw4w9WgXcQ" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     if(!newVideo.title) return alert("Title required")
@@ -457,9 +507,11 @@ export default function AdminPage() {
                     const cleanModule = sanitizeInput(newVideo.module||"General", 64)
                     const cleanDuration = sanitizeInput(newVideo.duration||"00:00", 20)
                     const cleanPath = sanitizeInput(newVideo.path||"cybersecurity-101", 64).toLowerCase().replace(/[^a-z0-9-]/g,"-")
-                    if(!/^([0-9]{1,2}:[0-9]{2}|Practice)$/.test(cleanDuration) && cleanDuration !== "00:00") { /* allow any */ }
-                    setVideos([...videos,{id:Date.now().toString(),title:cleanTitle,subtitle:sanitizeInput(newVideo.subtitle||"Lesson",64),duration:cleanDuration,module:cleanModule,path:cleanPath,featured:false}])
-                    setShowAddVideo(false); setNewVideo({title:"",subtitle:"",duration:"",module:"",path:""})
+                    try {
+                      const data = await adminApi("videos", "POST", undefined, { title: cleanTitle, subtitle: sanitizeInput(newVideo.subtitle||"Lesson",64), duration: cleanDuration, module: cleanModule, path: cleanPath, youtubeId: sanitizeInput(newVideo.youtubeId||"", 20) })
+                      setVideos([...videos, data.item as unknown as AdminVideo])
+                      setShowAddVideo(false); setNewVideo({title:"",subtitle:"",duration:"",module:"",path:"",youtubeId:"",description:""})
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Save</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddVideo(false)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -469,7 +521,8 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingVideo.title} onChange={e=>setEditingVideo({...editingVideo,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[180px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={editingVideo.duration} onChange={e=>setEditingVideo({...editingVideo,duration:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Module</label><Input value={editingVideo.module} onChange={e=>setEditingVideo({...editingVideo,module:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={editingVideo.youtubeId||""} onChange={e=>setEditingVideo({...editingVideo,youtubeId:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     const clean: AdminVideo = {
@@ -477,8 +530,12 @@ export default function AdminPage() {
                       title: sanitizeInput(editingVideo.title, 120),
                       module: sanitizeInput(editingVideo.module, 64),
                       duration: sanitizeInput(editingVideo.duration, 20),
+                      youtubeId: sanitizeInput(editingVideo.youtubeId||"", 20),
                     }
-                    setVideos(videos.map(v=>v.id===clean.id? clean: v)); setEditingVideo(null)
+                    try {
+                      await adminApi("videos", "PATCH", clean.id, { title: clean.title, module: clean.module, duration: clean.duration, youtubeId: clean.youtubeId })
+                      setVideos(videos.map(v=>v.id===clean.id? clean: v)); setEditingVideo(null)
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingVideo(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -507,7 +564,14 @@ export default function AdminPage() {
                         <td className="px-4 py-3"><Badge className={`text-[11px] border ${ev.status==="Live" ? "bg-emerald-600 text-white border-emerald-600" : ev.status==="Upcoming" ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}>{ev.status}</Badge></td>
                         <td className="px-4 py-3 text-right flex justify-end gap-1.5">
                           <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingEvent(ev)}><Edit2 className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={()=>setEvents(events.filter(x=>x.id!==ev.id))}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            if(!confirm(`Delete event "${ev.title}"?`)) return
+                            try {
+                              await adminApi("events", "DELETE", ev.id)
+                              setEvents(events.filter(x=>x.id!==ev.id))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </td>
                       </tr>
                     ))}
@@ -519,13 +583,16 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={newEvent.title} onChange={e=>setNewEvent({...newEvent,title:e.target.value})} placeholder="Event title" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Type</label><select value={newEvent.type} onChange={e=>setNewEvent({...newEvent,type:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>CTF</option><option>Workshop</option><option>Competition</option></select></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Date</label><Input type="date" value={newEvent.date} onChange={e=>setNewEvent({...newEvent,date:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     if(!newEvent.title) return alert("Title required")
                     const cleanTitle = sanitizeInput(newEvent.title, 120)
-                    setEvents([...events,{id:Date.now().toString(),title:cleanTitle,type: (["CTF","Workshop","Competition"].includes(newEvent.type as string) ? newEvent.type : "CTF") as any,date: newEvent.date||new Date().toISOString().slice(0,10),status:"Upcoming",participants:0}])
-                    setShowAddEvent(false); setNewEvent({title:"",type:"CTF",date:"",status:"Upcoming"})
+                    try {
+                      const data = await adminApi("events", "POST", undefined, { title: cleanTitle, type: (["CTF","Workshop","Competition"].includes(newEvent.type as string) ? newEvent.type : "CTF"), date: newEvent.date||new Date().toISOString().slice(0,10), status: "Upcoming" })
+                      setEvents([...events, data.item as unknown as AdminEvent])
+                      setShowAddEvent(false); setNewEvent({title:"",type:"CTF",date:"",status:"Upcoming"})
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Create</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddEvent(false)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -534,11 +601,14 @@ export default function AdminPage() {
                 <div className="p-4 border-t bg-amber-50 dark:bg-amber-950/20 flex flex-wrap gap-2 items-end">
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingEvent.title} onChange={e=>setEditingEvent({...editingEvent,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingEvent.status} onChange={e=>setEditingEvent({...editingEvent,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Live</option><option>Upcoming</option><option>Ended</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     const clean: AdminEvent = { ...editingEvent, title: sanitizeInput(editingEvent.title, 120) }
-                    setEvents(events.map(e=>e.id===clean.id? clean: e)); setEditingEvent(null)
+                    try {
+                      await adminApi("events", "PATCH", clean.id, { title: clean.title, status: clean.status })
+                      setEvents(events.map(e=>e.id===clean.id? clean: e)); setEditingEvent(null)
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingEvent(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -568,7 +638,14 @@ export default function AdminPage() {
                         <td className="px-4 py-3 text-right flex justify-end gap-1.5">
                           <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingNews(n)}><Edit2 className="w-3.5 h-3.5" /></Button>
                           <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>window.open(`/research/${n.id}`,"_blank")}><Eye className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={()=>setNews(news.filter(x=>x.id!==n.id))}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            if(!confirm(`Delete article "${n.title}"?`)) return
+                            try {
+                              await adminApi("news", "DELETE", n.id)
+                              setNews(news.filter(x=>x.id!==n.id))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </td>
                       </tr>
                     ))}
@@ -580,14 +657,19 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={newNews.title} onChange={e=>setNewNews({...newNews,title:e.target.value})} placeholder="Article title" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Author</label><Input value={newNews.author} onChange={e=>setNewNews({...newNews,author:e.target.value})} placeholder="Author" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[120px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={newNews.status} onChange={e=>setNewNews({...newNews,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Draft</option><option>Published</option><option>Pending</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <div className="w-full"><label className="text-[11px] font-semibold">Excerpt</label><Input value={newNews.excerpt||""} onChange={e=>setNewNews({...newNews,excerpt:e.target.value})} placeholder="Short summary..." className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full mt-1" /></div>
+                  <div className="w-full"><label className="text-[11px] font-semibold">Content</label><textarea value={newNews.content||""} onChange={e=>setNewNews({...newNews,content:e.target.value})} placeholder="Article body (paragraphs separated by blank lines)..." className="w-full min-h-[90px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-2 text-[13px] mt-1" /></div>
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     if(!newNews.title) return alert("Title required")
                     const cleanTitle = sanitizeInput(newNews.title, 200)
                     const cleanAuthor = sanitizeInput(newNews.author||"Admin", 64)
-                    setNews([...news,{id:Date.now().toString(),title:cleanTitle,excerpt:sanitizeInput(newNews.excerpt||"New research excerpt...",500),author:cleanAuthor,tags:sanitizeInput(newNews.tags||"general",100),views:0,status: (["Draft","Published","Pending"].includes(newNews.status as string) ? newNews.status : "Draft") as any }])
-                    setShowAddNews(false); setNewNews({title:"",excerpt:"",author:"",tags:"",status:"Draft"})
+                    try {
+                      const data = await adminApi("news", "POST", undefined, { title: cleanTitle, excerpt: sanitizeInput(newNews.excerpt||"",500), author: cleanAuthor, tags: sanitizeInput(newNews.tags||"general",100), status: (["Draft","Published","Pending"].includes(newNews.status as string) ? newNews.status : "Draft"), content: sanitizeInput(newNews.content||"",50000) })
+                      setNews([...news, data.item as unknown as AdminNews])
+                      setShowAddNews(false); setNewNews({title:"",excerpt:"",author:"",tags:"",status:"Draft",content:""})
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Publish</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddNews(false)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -596,11 +678,15 @@ export default function AdminPage() {
                 <div className="p-4 border-t bg-blue-50 dark:bg-blue-950/20 flex flex-wrap gap-2 items-end">
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingNews.title} onChange={e=>setEditingNews({...editingNews,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingNews.status} onChange={e=>setEditingNews({...editingNews,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Published</option><option>Draft</option><option>Pending</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <div className="w-full"><label className="text-[11px] font-semibold">Content</label><textarea value={editingNews.content||""} onChange={e=>setEditingNews({...editingNews,content:e.target.value})} placeholder="Article body..." className="w-full min-h-[90px] rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-2 text-[13px] mt-1" /></div>
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
-                    const clean: AdminNews = { ...editingNews, title: sanitizeInput(editingNews.title,200), excerpt: sanitizeInput(editingNews.excerpt,500), author: sanitizeInput(editingNews.author,64) }
-                    setNews(news.map(n=>n.id===clean.id? clean: n)); setEditingNews(null)
+                    const clean: AdminNews = { ...editingNews, title: sanitizeInput(editingNews.title,200), excerpt: sanitizeInput(editingNews.excerpt,500), author: sanitizeInput(editingNews.author,64), content: sanitizeInput(editingNews.content||"",50000) }
+                    try {
+                      await adminApi("news", "PATCH", clean.id, { title: clean.title, excerpt: clean.excerpt, author: clean.author, status: clean.status, content: clean.content })
+                      setNews(news.map(n=>n.id===clean.id? clean: n)); setEditingNews(null)
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingNews(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -621,13 +707,13 @@ export default function AdminPage() {
                     <tbody className="divide-y divide-[var(--border)]">
                       {adminLabs.filter(l=>!search || l.title.toLowerCase().includes(search.toLowerCase())).map(l=>(
                         <tr key={l.id} className="hover:bg-[var(--surface-2)]">
-                          <td className="px-4 py-3"><div className="font-[600]">{l.title}</div><div className="text-[11px] text-[var(--text-3)]">{l.difficulty} • {l.id}</div></td>
+                          <td className="px-4 py-3"><div className="font-[600]">{l.title}</div><div className="text-[11px] text-[var(--text-3)]">{l.difficulty} • {l.hasFlag ? "flag set" : "no flag"}</div></td>
                           <td className="px-4 py-3"><Badge variant="outline" className="text-[11px]">{l.category}</Badge></td>
                           <td className="px-4 py-3 font-mono text-[12px]">{l.duration}</td>
                           <td className="px-4 py-3 flex gap-1.5">
                             <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingLab(l)}><Edit2 className="w-3.5 h-3.5" /></Button>
                             <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>window.open(`/labs/${l.id}`,"_blank")}><Eye className="w-3.5 h-3.5" /></Button>
-                            <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={()=>{ if(confirm(`Delete lab "${l.title}"?`)) setAdminLabs(prev=>prev.filter(x=>x.id!==l.id))}}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{ if(!requireAdmin()) return; if(confirm(`Delete lab "${l.title}"?`)) { try { await adminApi("labs", "DELETE", l.id); setAdminLabs(prev=>prev.filter(x=>x.id!==l.id)) } catch (err) { alert(err instanceof Error ? err.message : "Failed") } }}}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </td>
                         </tr>
                       ))}
@@ -640,13 +726,20 @@ export default function AdminPage() {
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Category</label><select value={newLab.category} onChange={e=>setNewLab({...newLab,category:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Web Security</option><option>Linux</option><option>Active Directory</option><option>Cloud Security</option><option>Forensics</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={newLab.difficulty} onChange={e=>setNewLab({...newLab,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={newLab.duration} onChange={e=>setNewLab({...newLab,duration:e.target.value})} placeholder="45 min" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[90px] mt-1" /></div>
-                    <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Objectives</label><Input type="number" min={1} value={newLab.objectives ?? 1} onChange={e=>setNewLab({...newLab,objectives:Math.max(1,parseInt(e.target.value)||1)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[70px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={newLab.youtubeId||""} onChange={e=>setNewLab({...newLab,youtubeId:e.target.value})} placeholder="optional" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Flag (stored hashed)</label><Input value={newLab.flag||""} onChange={e=>setNewLab({...newLab,flag:e.target.value})} placeholder="flag{...}" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /></div>
+                    <div className="w-full"><label className="text-[11px] font-semibold">Description</label><Input value={newLab.description||""} onChange={e=>setNewLab({...newLab,description:e.target.value})} placeholder="What this lab covers..." className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full mt-1" /></div>
+                    <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                       if(!requireAdmin()) return
                       if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                       if(!newLab.title) return alert("Title required")
                       const cleanTitle = sanitizeInput(newLab.title, 120)
-                      setAdminLabs([...adminLabs,{id:`lab-${Date.now()}`, title:cleanTitle, category:sanitizeInput(newLab.category||"Web Security",64), difficulty: (["Beginner","Intermediate","Advanced"].includes(newLab.difficulty as string) ? newLab.difficulty : "Beginner") as any, duration:sanitizeInput(newLab.duration||"60 min",20)}])
-                      setShowAddLab(false); setNewLab({title:"", category:"Web Security", difficulty:"Beginner", duration:""})
+                      try {
+                        const data = await adminApi("labs", "POST", undefined, { title: cleanTitle, category: sanitizeInput(newLab.category||"Web Security",64), difficulty: (["Beginner","Intermediate","Advanced"].includes(newLab.difficulty as string) ? newLab.difficulty : "Beginner"), duration: sanitizeInput(newLab.duration||"60 min",20), description: sanitizeInput(newLab.description||"",2000), objectives: newLab.objectives ?? 1, youtubeId: sanitizeInput(newLab.youtubeId||"",20), flag: (newLab.flag||"").trim() || undefined })
+                        setAdminLabs([...adminLabs, data.item as unknown as AdminLab])
+                        setShowAddLab(false); setNewLab({title:"", category:"Web Security", difficulty:"Beginner", duration:"", description:"", objectives:1, youtubeId:"", flag:""})
+                      } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                     }}><Save className="w-3.5 h-3.5 mr-1" /> Create</Button>
                     <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddLab(false)}><X className="w-3.5 h-3.5" /></Button>
                   </div>
@@ -655,11 +748,16 @@ export default function AdminPage() {
                   <div className="p-4 border-t bg-blue-50 dark:bg-blue-950/20 flex flex-wrap gap-2 items-end">
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingLab.title} onChange={e=>setEditingLab({...editingLab,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
                     <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Duration</label><Input value={editingLab.duration} onChange={e=>setEditingLab({...editingLab,duration:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[90px] mt-1" /></div>
-                    <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">YouTube ID</label><Input value={editingLab.youtubeId||""} onChange={e=>setEditingLab({...editingLab,youtubeId:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[130px] mt-1 font-mono" /></div>
+                    <div className="w-full"><label className="text-[11px] font-semibold">Description</label><Input value={editingLab.description||""} onChange={e=>setEditingLab({...editingLab,description:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full mt-1" /></div>
+                    <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                       if(!requireAdmin()) return
                       if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
-                      const clean = { ...editingLab, title: sanitizeInput(editingLab.title,120), duration: sanitizeInput(editingLab.duration,20) }
-                      setAdminLabs(adminLabs.map(x=>x.id===clean.id? clean as any: x)); setEditingLab(null)
+                      const clean = { ...editingLab, title: sanitizeInput(editingLab.title,120), duration: sanitizeInput(editingLab.duration,20), description: sanitizeInput(editingLab.description||"",2000), youtubeId: sanitizeInput(editingLab.youtubeId||"",20) }
+                      try {
+                        await adminApi("labs", "PATCH", clean.id, { title: clean.title, duration: clean.duration, description: clean.description, youtubeId: clean.youtubeId })
+                        setAdminLabs(adminLabs.map(x=>x.id===clean.id? clean as AdminLab: x)); setEditingLab(null)
+                      } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                     }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                     <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingLab(null)}><X className="w-3.5 h-3.5" /></Button>
                   </div>
@@ -667,14 +765,163 @@ export default function AdminPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="w-4 h-4" /> Challenges</CardTitle></CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="gap-1"><Trophy className="w-3 h-3" /> 1,204 active</Badge>
-                <Badge variant="secondary">11 categories</Badge>
-                <Link href="/challenges"><Button size="sm" variant="secondary" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 ml-auto">Manage challenges →</Button></Link>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="w-4 h-4" /> Challenges — {adminChallenges.length}</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap gap-2 items-center">
+                <Badge variant="outline" className="gap-1"><Trophy className="w-3 h-3" /> {adminChallenges.length} total</Badge>
+                <Badge variant="secondary">{adminChallenges.filter(c=>c.hasFlag).length} with flags</Badge>
+                <Button size="sm" variant="secondary" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 ml-auto" onClick={()=>{setActive("challenges"); setShowAddChallenge(true)}}>Manage challenges →</Button>
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* Challenges */}
+        {active==="challenges" && (
+          <div className="grid gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0"><CardTitle className="flex items-center gap-2"><Trophy className="w-4 h-4" /> Challenges — {adminChallenges.filter(c=>!search || c.name.toLowerCase().includes(search.toLowerCase())).length} <span className="text-[11px] font-normal text-[var(--text-3)]">create / edit / delete, set flags</span></CardTitle><Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 gap-1.5" onClick={()=>setShowAddChallenge(true)}><Plus className="w-3.5 h-3.5" /> Create challenge</Button></CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-auto">
+                  <table className="w-full text-left text-[13px]">
+                    <thead className="bg-[var(--surface-2)] border-y border-[var(--border)] text-[11px] tracking-widest uppercase text-[var(--text-3)]"><tr><th className="px-4 py-2.5">Challenge</th><th className="px-4 py-2.5">Category</th><th className="px-4 py-2.5">Points</th><th className="px-4 py-2.5">Flag</th><th className="px-4 py-2.5 text-right">Actions</th></tr></thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {adminChallenges.filter(c=>!search || c.name.toLowerCase().includes(search.toLowerCase())).map(c=>(
+                        <tr key={c.id} className="hover:bg-[var(--surface-2)]">
+                          <td className="px-4 py-3"><div className="font-[600]">{c.name}</div><div className="text-[11px] text-[var(--text-3)]">{c.difficulty} • {c.solves} solves</div></td>
+                          <td className="px-4 py-3"><Badge variant="outline" className="text-[11px]">{c.category}</Badge></td>
+                          <td className="px-4 py-3 font-mono text-[12px]">{c.points}</td>
+                          <td className="px-4 py-3">{c.hasFlag ? <Badge variant="secondary" className="text-[11px] bg-emerald-100 text-emerald-800 border-emerald-200">set</Badge> : <span className="text-[11px] text-[var(--text-3)]">—</span>}</td>
+                          <td className="px-4 py-3 text-right flex justify-end gap-1.5">
+                            <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingChallenge(c)}><Edit2 className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>window.open(`/challenges/${c.id}`,"_blank")}><Eye className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{ if(!requireAdmin()) return; if(confirm(`Delete challenge "${c.name}"?`)) { try { await adminApi("challenges", "DELETE", c.id); setAdminChallenges(prev=>prev.filter(x=>x.id!==c.id)) } catch (err) { alert(err instanceof Error ? err.message : "Failed") } }}}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {showAddChallenge && (
+                  <div className="p-4 border-t bg-[var(--surface-2)] flex flex-wrap gap-2 items-end">
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Name</label><Input value={newChallenge.name} onChange={e=>setNewChallenge({...newChallenge,name:e.target.value})} placeholder="Challenge name" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Category</label><select value={newChallenge.category} onChange={e=>setNewChallenge({...newChallenge,category:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Web</option><option>Crypto</option><option>Pwn</option><option>Reverse</option><option>Forensics</option><option>OSINT</option><option>Cloud</option><option>Blue Team</option><option>Misc</option></select></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Difficulty</label><select value={newChallenge.difficulty} onChange={e=>setNewChallenge({...newChallenge,difficulty:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1 w-full sm:w-auto"><option>Easy</option><option>Medium</option><option>Hard</option><option>Insane</option></select></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Points</label><Input type="number" min={0} value={newChallenge.points ?? 100} onChange={e=>setNewChallenge({...newChallenge,points:Math.max(0,parseInt(e.target.value)||0)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Flag (stored hashed)</label><Input value={newChallenge.flag||""} onChange={e=>setNewChallenge({...newChallenge,flag:e.target.value})} placeholder="flag{...}" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /></div>
+                    <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
+                      if(!requireAdmin()) return
+                      if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
+                      if(!newChallenge.name) return alert("Name required")
+                      try {
+                        const data = await adminApi("challenges", "POST", undefined, { name: sanitizeInput(newChallenge.name,200), category: newChallenge.category||"Web", difficulty: (["Easy","Medium","Hard","Insane"].includes(newChallenge.difficulty as string) ? newChallenge.difficulty : "Easy"), points: newChallenge.points ?? 100, flag: (newChallenge.flag||"").trim() || undefined })
+                        setAdminChallenges([...adminChallenges, data.item as unknown as AdminChallenge])
+                        setShowAddChallenge(false); setNewChallenge({name:"", category:"Web", difficulty:"Easy", points:100, flag:""})
+                      } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                    }}><Save className="w-3.5 h-3.5 mr-1" /> Create</Button>
+                    <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddChallenge(false)}><X className="w-3.5 h-3.5" /></Button>
+                  </div>
+                )}
+                {editingChallenge && (
+                  <div className="p-4 border-t bg-blue-50 dark:bg-blue-950/20 flex flex-wrap gap-2 items-end">
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Name</label><Input value={editingChallenge.name} onChange={e=>setEditingChallenge({...editingChallenge,name:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[200px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Points</label><Input type="number" min={0} value={editingChallenge.points} onChange={e=>setEditingChallenge({...editingChallenge,points:Math.max(0,parseInt(e.target.value)||0)})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[80px] mt-1" /></div>
+                    <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">New flag (optional)</label><Input placeholder="leave empty to keep" onChange={e=>setEditingChallenge({...editingChallenge,flag:e.target.value} as AdminChallenge)} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[160px] mt-1 font-mono" /></div>
+                    <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
+                      if(!requireAdmin()) return
+                      if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
+                      const clean = { ...editingChallenge, name: sanitizeInput(editingChallenge.name,200) }
+                      const patch: Record<string, unknown> = { name: clean.name, points: clean.points }
+                      const flagVal = (editingChallenge as AdminChallenge & { flag?: string }).flag
+                      if (flagVal && flagVal.trim()) patch.flag = flagVal.trim()
+                      try {
+                        await adminApi("challenges", "PATCH", clean.id, patch)
+                        setAdminChallenges(adminChallenges.map(x=>x.id===clean.id? {...clean, hasFlag: clean.hasFlag || !!(flagVal && flagVal.trim())} : x)); setEditingChallenge(null)
+                      } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                    }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
+                    <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingChallenge(null)}><X className="w-3.5 h-3.5" /></Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Inbox — user support chats */}
+        {active==="inbox" && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+              <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4" /> Inbox — {inbox.filter(x=>x.from_role==="user" && !x.read).length} unread</CardTitle>
+              <Button size="sm" variant="secondary" className="h-8" onClick={async ()=>{ try { const m = await adminApi("messages"); setInbox((m.items ?? []) as unknown as typeof inbox) } catch (err) { alert(err instanceof Error ? err.message : "Failed") } }}>Refresh</Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(() => {
+                const threads = new Map<string, typeof inbox>()
+                for (const msg of inbox) {
+                  const arr = threads.get(msg.user_id) ?? []
+                  arr.push(msg)
+                  threads.set(msg.user_id, arr)
+                }
+                const list = [...threads.entries()].sort((a, b) => {
+                  const ta = a[1][a[1].length - 1]?.created_at ?? ""
+                  const tb = b[1][b[1].length - 1]?.created_at ?? ""
+                  return tb.localeCompare(ta)
+                })
+                const current = inboxUser ? (threads.get(inboxUser) ?? []) : []
+                const reply = async () => {
+                  if (!inboxUser) return
+                  if(!requireAdmin()) return
+                  const clean = sanitizeInput(replyDraft, 2000).trim()
+                  if (!clean) return alert("Write a reply")
+                  if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
+                  try {
+                    const data = await adminApi("messages", "POST", undefined, { user_id: inboxUser, text: clean })
+                    setInbox(prev => [...prev, data.item as unknown as typeof inbox[number]])
+                    setReplyDraft("")
+                  } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                }
+                if (list.length === 0) {
+                  return <div className="p-6 text-center text-[13px] text-[var(--text-2)]">No support messages yet. Users reach you from the Messages page.</div>
+                }
+                return (
+                  <div className="grid md:grid-cols-[260px_1fr] min-h-[320px]">
+                    <div className="border-r border-[var(--border)] divide-y divide-[var(--border)] max-h-[420px] overflow-auto">
+                      {list.map(([uid, msgs]) => {
+                        const last = msgs[msgs.length - 1]
+                        const unread = msgs.filter(x => x.from_role === "user" && !x.read).length
+                        return (
+                          <button key={uid} onClick={()=>setInboxUser(uid)} className={`w-full text-left p-3 hover:bg-[var(--surface-2)] ${inboxUser===uid ? "bg-[var(--surface-2)]" : ""}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[13px] font-[600] truncate">{msgs[0]?.userName || msgs[0]?.userEmail || uid.slice(0,8)}</span>
+                              {unread > 0 && <Badge className="text-[10px] bg-red-600 text-white border-red-600">{unread}</Badge>}
+                            </div>
+                            <div className="text-[11px] text-[var(--text-3)] truncate">{msgs[0]?.userEmail}</div>
+                            <div className="text-[12px] text-[var(--text-2)] truncate mt-0.5">{last?.text}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="flex flex-col min-h-[320px]">
+                      {!inboxUser || current.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center text-[13px] text-[var(--text-2)] p-6">Select a conversation.</div>
+                      ) : (
+                        <>
+                          <div className="flex-1 p-4 space-y-2 overflow-auto max-h-[360px] bg-[var(--surface-2)]">
+                            {current.map(msg => (
+                              <div key={msg.id} className={`${msg.from_role === "admin" ? "ml-auto bg-[var(--text)] text-[var(--background)]" : "bg-[var(--surface)] border border-[var(--border)]"} max-w-[80%] p-2.5 rounded-[10px] text-[12.5px]`}>{msg.text}</div>
+                            ))}
+                          </div>
+                          <div className="p-3 border-t border-[var(--border)] flex gap-2">
+                            <Input value={replyDraft} onChange={e=>setReplyDraft(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") reply() }} placeholder="Reply as admin..." className="flex-1 h-9 bg-[var(--surface)]" aria-label="Reply to user" />
+                            <Button size="sm" className="h-9" onClick={reply} aria-label="Send reply"><Send className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+            </CardContent>
+          </Card>
         )}
 
         {/* System */}
@@ -684,15 +931,23 @@ export default function AdminPage() {
               <CardHeader><CardTitle className="flex items-center gap-2"><Settings className="w-4 h-4" /> Platform Settings</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div><label className="text-[12px] font-medium">Announcement Banner</label><Input value={announcement} onChange={e=>setAnnouncement(e.target.value)} placeholder="Enter announcement..." className="mt-1.5 h-11 sm:h-9 min-h-[44px] sm:min-h-0 bg-[var(--surface)]" /></div>
-                <div><label className="text-[12px] font-medium">Maintenance Mode</label><div className="mt-1.5 flex items-center gap-2"><Badge variant="outline" className={maintenance ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}>{maintenance ? "On" : "Off"}</Badge><Button size="sm" variant="secondary" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 ml-auto" onClick={()=>{ const n=!maintenance; setMaintenance(n); try{ localStorage.setItem("aegis_maintenance", n?"1":"0")}catch{} }}>Toggle</Button></div></div>
-                <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full" onClick={()=>{ try{ localStorage.setItem("aegis_announcement", announcement); localStorage.setItem("aegis_maintenance", maintenance?"1":"0")}catch{}; alert("Settings saved to localStorage (aegis_announcement, aegis_maintenance)")}}><Save className="w-3.5 h-3.5 mr-1" /> Save Settings</Button>
-                <div className="text-[11px] text-[var(--text-3)] pt-2 border-t">RBAC, rate limiting, secure headers enforced server-side. Product-ready: audit logs, RBAC, isolation.</div>
+                <div><label className="text-[12px] font-medium">Maintenance Mode</label><div className="mt-1.5 flex items-center gap-2"><Badge variant="outline" className={maintenance ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}>{maintenance ? "On" : "Off"}</Badge><Button size="sm" variant="secondary" className="h-9 sm:h-7 min-h-[36px] sm:min-h-0 ml-auto" onClick={()=>setMaintenance(!maintenance)}>Toggle</Button></div></div>
+                <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full" onClick={async ()=>{
+                  if(!requireAdmin()) return
+                  if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
+                  try {
+                    await adminApi("settings", "POST", undefined, { key: "announcement", value: announcement })
+                    await adminApi("settings", "POST", undefined, { key: "maintenance", value: maintenance ? "1" : "0" })
+                    alert("Settings saved")
+                  } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                }}><Save className="w-3.5 h-3.5 mr-1" /> Save Settings</Button>
+                <div className="text-[11px] text-[var(--text-3)] pt-2 border-t">RBAC, rate limiting, and secure headers are enforced server-side.</div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="w-4 h-4" /> Security</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-[13px]">
-                <div className="flex items-center justify-between p-3 rounded-[10px] border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900"><span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> All systems operational</span><Badge variant="secondary" className="bg-white">99.9% uptime</Badge></div>
+                <div className="flex items-center justify-between p-3 rounded-[10px] border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900"><span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Admin session active</span></div>
                 <div className="flex items-center justify-between"><span>RBAC</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-800">Enabled</Badge></div>
                 <div className="flex items-center justify-between"><span>Rate limiting</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-800">Enabled</Badge></div>
                 <div className="flex items-center justify-between"><span>Lab isolation</span><Badge variant="secondary">Containers/K8s ready</Badge></div>
@@ -721,7 +976,14 @@ export default function AdminPage() {
                         <td className="px-4 py-3"><Badge className={`text-[11px] border ${c.status==="Published"?"bg-emerald-600 text-white border-emerald-600":"bg-zinc-100 text-zinc-700 border-zinc-200"}`}>{c.status}</Badge></td>
                         <td className="px-4 py-3 text-right flex justify-end gap-1.5">
                           <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0" onClick={()=>setEditingCVE(c)}><Edit2 className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={()=>setCves(cves.filter(x=>x.id!==c.id))}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7 min-h-[36px] sm:min-h-0 p-0 text-red-600" onClick={async ()=>{
+                            if(!requireAdmin()) return
+                            if(!confirm(`Delete CVE "${c.cveId}"?`)) return
+                            try {
+                              await adminApi("cves", "DELETE", c.id)
+                              setCves(cves.filter(x=>x.id!==c.id))
+                            } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
+                          }}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </td>
                       </tr>
                     ))}
@@ -733,15 +995,18 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">CVE ID</label><Input value={newCVE.cveId} onChange={e=>setNewCVE({...newCVE,cveId:e.target.value})} placeholder="CVE-2026-0000" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[140px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={newCVE.title} onChange={e=>setNewCVE({...newCVE,title:e.target.value})} placeholder="CVE title" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Severity</label><select value={newCVE.severity} onChange={e=>setNewCVE({...newCVE,severity:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border bg-[var(--surface)] px-2 text-[13px] mt-1"><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     if(!newCVE.cveId||!newCVE.title) return alert("CVE ID & Title required")
                     const cveIdPat = /^CVE-\d{4}-\d{4,7}$/
                     const cleanId = sanitizeInput(newCVE.cveId, 20).toUpperCase()
                     if(!cveIdPat.test(cleanId)) return alert("Invalid CVE ID format (CVE-YYYY-XXXX)")
-                    setCves([...cves,{id:Date.now().toString(),cveId:cleanId,title:sanitizeInput(newCVE.title,200),severity: (["Critical","High","Medium","Low"].includes(newCVE.severity as string) ? newCVE.severity : "High") as any,status:"Draft",publishDate:new Date().toISOString().slice(0,10)}])
-                    setShowAddCVE(false); setNewCVE({cveId:"",title:"",severity:"High",status:"Draft"})
+                    try {
+                      const data = await adminApi("cves", "POST", undefined, { cveId: cleanId, title: sanitizeInput(newCVE.title,200), severity: (["Critical","High","Medium","Low"].includes(newCVE.severity as string) ? newCVE.severity : "High") })
+                      setCves([...cves, data.item as unknown as AdminCVE])
+                      setShowAddCVE(false); setNewCVE({cveId:"",title:"",severity:"High",status:"Draft"})
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Save</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setShowAddCVE(false)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
@@ -752,11 +1017,14 @@ export default function AdminPage() {
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Title</label><Input value={editingCVE.title} onChange={e=>setEditingCVE({...editingCVE,title:e.target.value})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 w-full sm:w-[220px] mt-1" /></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Severity</label><select value={editingCVE.severity} onChange={e=>setEditingCVE({...editingCVE,severity:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></div>
                   <div className="w-full sm:w-auto"><label className="text-[11px] font-semibold">Status</label><select value={editingCVE.status} onChange={e=>setEditingCVE({...editingCVE,status:e.target.value as any})} className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 rounded-[8px] border px-2 text-[13px] mt-1"><option>Published</option><option>Draft</option></select></div>
-                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>{
+                  <Button size="sm" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={async ()=>{
                     if(!requireAdmin()) return
                     if(!validateCsrfToken(csrfToken)) return alert("CSRF failed")
                     const clean: AdminCVE = { ...editingCVE, cveId: sanitizeInput(editingCVE.cveId,20).toUpperCase(), title: sanitizeInput(editingCVE.title,200) }
-                    setCves(cves.map(c=>c.id===clean.id? clean: c)); setEditingCVE(null)
+                    try {
+                      await adminApi("cves", "PATCH", clean.id, { cveId: clean.cveId, title: clean.title, severity: clean.severity, status: clean.status })
+                      setCves(cves.map(c=>c.id===clean.id? clean: c)); setEditingCVE(null)
+                    } catch (err) { alert(err instanceof Error ? err.message : "Failed") }
                   }}><Save className="w-3.5 h-3.5 mr-1" /> Update</Button>
                   <Button size="sm" variant="ghost" className="h-11 sm:h-8 min-h-[44px] sm:min-h-0" onClick={()=>setEditingCVE(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>

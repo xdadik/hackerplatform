@@ -1,23 +1,54 @@
 "use client"
 import Link from "next/link"
 import * as React from "react"
+import { notFound } from "next/navigation"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Bookmark, MessageSquare, Eye, Clock, Award, Share2, FileText, Trash2 } from "lucide-react"
+import { ArrowLeft, Bookmark, MessageSquare, Eye, Share2, FileText, Trash2 } from "lucide-react"
 import { sanitizeInput } from "@/lib/sanitize"
 import { commentLimiter } from "@/lib/rate-limit"
 
+type Article = {
+  id: string
+  title: string
+  excerpt: string
+  author: string
+  tags: string[]
+  views: number
+  content: string
+  createdAt: string
+}
+
 export default function ResearchDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = (React as any).use(params) as { id: string }
+  const [article, setArticle] = React.useState<Article | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [missing, setMissing] = React.useState(false)
   const [bookmarked, setBookmarked] = React.useState(false)
-  const [comments, setComments] = React.useState<{user:string,text:string,time:string}[]>([
-    { user: "alexmorgan", text: "Great detection rule — we deployed variant with `userAgent` filter to reduce CI noise.", time: "2h ago" },
-    { user: "priya_n", text: "Do you have data on prevalence of ExternalId reuse?", time: "5h ago" },
-  ])
+  const [comments, setComments] = React.useState<{user:string,text:string,time:string}[]>([])
   const [newComment, setNewComment] = React.useState("")
-  const [views, setViews] = React.useState(3421)
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(`/api/news/${encodeURIComponent(id)}`)
+        if (res.status === 404) {
+          if (!cancelled) { setMissing(true); setLoading(false) }
+          return
+        }
+        if (!res.ok) throw new Error("load failed")
+        const body = await res.json()
+        if (!cancelled) { setArticle(body.article); setLoading(false) }
+      } catch {
+        if (!cancelled) { setMissing(true); setLoading(false) }
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [id])
 
   React.useEffect(()=>{
     try{
@@ -25,12 +56,26 @@ export default function ResearchDetail({ params }: { params: Promise<{ id: strin
       if(bm){ const s=new Set(JSON.parse(bm)); setBookmarked((s as Set<string>).has(id)) }
       const c=localStorage.getItem(`aegis_research_comments_${id}`)
       if(c) setComments(JSON.parse(c))
-      // increment view count mock
-      const v=localStorage.getItem(`aegis_research_views_${id}`)
-      if(!v){ localStorage.setItem(`aegis_research_views_${id}`,"1"); setViews(v=>v+1)} else setViews(v=>v+0)
     }catch{}
   },[id])
   React.useEffect(()=>{ try{ localStorage.setItem(`aegis_research_comments_${id}`, JSON.stringify(comments))}catch{}},[comments,id])
+
+  if (missing) {
+    notFound()
+  }
+
+  if (loading || !article) {
+    return (
+      <AppShell withSidebar>
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[860px]">
+          <div className="h-5 w-24 rounded bg-[var(--surface-2)] animate-pulse" />
+          <div className="mt-4 h-8 w-2/3 rounded bg-[var(--surface-2)] animate-pulse" />
+          <div className="mt-2 h-4 w-1/2 rounded bg-[var(--surface-2)] animate-pulse" />
+          <div className="mt-6 h-[280px] rounded-[12px] bg-[var(--surface-2)] animate-pulse" />
+        </div>
+      </AppShell>
+    )
+  }
 
   const toggleBookmark=()=>{
     const next=!bookmarked
@@ -61,26 +106,26 @@ export default function ResearchDetail({ params }: { params: Promise<{ id: strin
     setComments(prev=>prev.filter((_,i)=>i!==idx))
   }
 
+  const paragraphs = article.content.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+
   return (
     <AppShell withSidebar>
       <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[860px]">
         <Link href="/research" className="inline-flex items-center gap-1.5 text-[13px] text-[var(--text-2)] hover:text-[var(--text)] mb-4"><ArrowLeft className="w-3.5 h-3.5" /> Back to research</Link>
 
         <div className="flex items-center gap-2 mb-3">
-          <Badge variant="accent">Vulnerability Analysis</Badge>
-          <span className="text-[11px] text-[var(--text-3)]">• 12 min read • Jan 14, 2026</span>
-          <span className="ml-auto hidden sm:flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Eye className="w-3 h-3" />{views.toLocaleString()} • <Bookmark className="w-3 h-3" />{42 + (bookmarked?1:0)} • <MessageSquare className="w-3 h-3" />{comments.length}</span>
+          <span className="text-[11px] text-[var(--text-3)]">{article.createdAt ? new Date(article.createdAt).toLocaleDateString() : ""}</span>
+          <span className="ml-auto hidden sm:flex items-center gap-1 text-[11px] text-[var(--text-3)]"><Eye className="w-3 h-3" />{article.views.toLocaleString()} • <Bookmark className="w-3 h-3" />{bookmarked?1:0} • <MessageSquare className="w-3 h-3" />{comments.length}</span>
         </div>
 
-        <h1 className="text-[24px] sm:text-[28px] font-[700] tracking-[-0.04em] leading-tight">Abusing Overly Permissive IAM Trust Policies in AWS Organizations</h1>
-        <p className="mt-3 text-[14px] leading-7 text-[var(--text-2)]">We analyze 1,200 real trust policies, demonstrate a cross-account privilege escalation, and provide CloudTrail detection and Terraform remediation.</p>
+        <h1 className="text-[24px] sm:text-[28px] font-[700] tracking-[-0.04em] leading-tight">{article.title}</h1>
+        {article.excerpt && <p className="mt-3 text-[14px] leading-7 text-[var(--text-2)]">{article.excerpt}</p>}
 
         <div className="mt-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[var(--text)] text-[var(--background)] flex items-center justify-center text-[12px] font-bold">SC</div>
+            <div className="w-9 h-9 rounded-full bg-[var(--text)] text-[var(--background)] flex items-center justify-center text-[12px] font-bold">{(article.author || "?").slice(0,2).toUpperCase()}</div>
             <div>
-              <div className="text-[13px] font-[600]">Sophia Chen <Badge variant="success" className="ml-2 text-[10px]">Staff Pick</Badge></div>
-              <div className="text-[11px] text-[var(--text-2)]">Security Engineer • 4.2k reputation • sophiachen</div>
+              <div className="text-[13px] font-[600]">{article.author || "Aegis Team"}</div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2">
@@ -93,52 +138,23 @@ export default function ResearchDetail({ params }: { params: Promise<{ id: strin
           <Button variant="secondary" size="sm" className="flex-1 h-8" onClick={handleShare}><Share2 className="w-3.5 h-3.5 mr-1" /> Share</Button>
         </div>
 
-        <div className="mt-6 flex gap-2 flex-wrap">
-          <Badge variant="secondary">#aws</Badge><Badge variant="secondary">#iam</Badge><Badge variant="secondary">#detection-engineering</Badge><Badge variant="secondary">#cloudtrail</Badge>
-        </div>
+        {article.tags.length > 0 && (
+          <div className="mt-6 flex gap-2 flex-wrap">
+            {article.tags.map(t => <Badge key={t} variant="secondary">#{t}</Badge>)}
+          </div>
+        )}
 
         <Card className="mt-6">
           <CardContent className="p-0 overflow-hidden">
-            <article className="prose prose-sm sm:prose-base max-w-none p-6 sm:p-8 prose-headings:tracking-[-0.02em] prose-headings:font-[650] prose-p:leading-7 prose-p:text-[var(--text-2)] prose-code:text-[12px] prose-code:font-mono prose-pre:bg-[#0F1012] prose-pre:border prose-pre:border-zinc-800">
-              <h2>Summary</h2>
-              <p>Many organizations allow <code>sts:AssumeRole</code> from <code>*</code> principals with weak externalId. We scanned 1,200 policies and found 18% permit cross-account assumption without MFA or IP restriction.</p>
-              <h2>Exploitation</h2>
-              <p>Attacker with compromised low-privilege account enumerates trusted roles via <code>iam:ListRoles</code>, then assumes:</p>
-              <pre><code className="language-bash">aws sts assume-role --role-arn arn:aws:iam::123456789012:role/AdminCrossAccount --role-session-name x</code></pre>
-              <p>From there, we pivot to sensitive S3 and escalate via <code>iam:PassRole</code> + <code>ec2:RunInstances</code>.</p>
-              <h2>Detection — CloudTrail Sigma</h2>
-              <pre><code className="language-yaml">{`title: Overly Permissive AssumeRole
-detection:
-  selection:
-    eventName: AssumeRole
-    errorCode: null
-    requestParameters.roleArn|contains: 'arn:aws:iam'
-  condition: selection | count() by userIdentity.arn > 5
-falsepositives:
-  - CI/CD roles
-level: medium`}</code></pre>
-              <h2>Terraform Remediation</h2>
-              <pre><code className="language-hcl">{`data "aws_iam_policy_document" "trust" {
-  statement {
-    effect  = "Allow"
-    principals { type = "AWS" identifiers = ["arn:aws:iam::123456789012:root"] }
-    actions = ["sts:AssumeRole"]
-    condition {
-      test     = "StringEquals"
-      variable = "sts:ExternalId"
-      values   = [var.external_id]
-    }
-  }
-}`}</code></pre>
-              <h2>Related</h2>
-              <ul>
-                <li>Lab: Cloud IAM Misconfiguration — hands-on exploitation and audit (<Link href="/labs/lab-4" className="text-[var(--accent)]">open lab →</Link>)</li>
-                <li>Detection: Entra ID Token Replay (<Link href="/research" className="text-[var(--accent)]">KQL + Sigma</Link>)</li>
-              </ul>
+            <article className="max-w-none p-6 sm:p-8">
+              {paragraphs.length === 0 ? (
+                <p className="text-[13px] leading-7 text-[var(--text-2)]">Full article body has not been published yet.</p>
+              ) : paragraphs.map((p, i) => (
+                <p key={i} className="text-[13px] leading-7 text-[var(--text-2)] mt-4 first:mt-0">{p}</p>
+              ))}
             </article>
             <div className="px-6 sm:px-8 py-4 bg-[var(--surface-2)] border-t border-[var(--border)] flex items-center justify-between text-[12px]">
-              <span className="text-[var(--text-3)] flex items-center gap-2"><FileText className="w-3 h-3" /> Markdown • Syntax highlighted • Verifiable authorship</span>
-              <span className="hidden sm:block text-[var(--text-3)]">Last updated Jan 14, 2026 • CC BY-SA</span>
+              <span className="text-[var(--text-3)] flex items-center gap-2"><FileText className="w-3 h-3" /> Published by {article.author || "Aegis Team"}</span>
             </div>
           </CardContent>
         </Card>
@@ -147,6 +163,9 @@ level: medium`}</code></pre>
           <CardContent className="p-5">
             <div className="text-[13px] font-semibold flex items-center gap-2"><MessageSquare className="w-3.5 h-3.5" /> Discussion • {comments.length} comments</div>
             <div className="mt-4 space-y-3">
+              {comments.length === 0 && (
+                <div className="p-3 rounded-[10px] border border-dashed border-[var(--border)] text-center text-[12px] text-[var(--text-2)]">No comments yet — start the discussion.</div>
+              )}
               {comments.map((c,i) => (
                 <div key={i} className="flex gap-2.5 p-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] group">
                   <div className="w-7 h-7 rounded-full bg-[var(--text)] text-[var(--background)] flex items-center justify-center text-[11px] font-semibold">{c.user.slice(0,2).toUpperCase()}</div>
@@ -158,7 +177,7 @@ level: medium`}</code></pre>
                 <input value={newComment} onChange={e=>setNewComment(e.target.value)} placeholder="Add a comment — be technical, cite sources..." className="flex-1 h-9 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" onKeyDown={e=>{ if(e.key==="Enter") handleComment()}} />
                 <Button size="sm" className="h-9" onClick={handleComment}>Comment</Button>
               </div>
-              <div className="text-[11px] text-[var(--text-3)]">Comments saved to localStorage (aegis_research_comments_{id}). Your comments deletable. Others read-only in demo.</div>
+              <div className="text-[11px] text-[var(--text-3)]">Your comments are deletable. Comments are stored in this browser.</div>
             </div>
           </CardContent>
         </Card>

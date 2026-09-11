@@ -13,24 +13,13 @@ import { Eye, EyeOff, ArrowRight, ShieldCheck, AlertCircle } from "lucide-react"
 import { sanitizeEmail } from "@/lib/sanitize"
 import { loginLimiter } from "@/lib/rate-limit"
 
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-      <path fill="#FBBC05" d="M5.84 14.09A6.98 6.98 0 0 1 5.16 12c0-.72.12-1.42.34-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.78.42 3.45 1.18 5.07l3.66-2.84z"/>
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-    </svg>
-  )
-}
-
 export default function LoginPage() {
-  const { login, loginWithGoogle } = useAuth()
+  const { login } = useAuth()
   const [show, setShow] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     // Rate limiting — 5 attempts / 15 min
     const rl = loginLimiter.check()
@@ -44,25 +33,28 @@ export default function LoginPage() {
     const emailRaw = (form.elements.namedItem("email") as HTMLInputElement).value
     const password = (form.elements.namedItem("password") as HTMLInputElement).value
     const email = sanitizeEmail(emailRaw) || emailRaw.trim()
-      setTimeout(() => {
+    if (!email.includes("@") || password.length < 8) {
       setLoading(false)
-      if (!email.includes("@") || password.length < 6) {
-        loginLimiter.record(false)
-        const rem = loginLimiter.check().remaining
-        setError(`Invalid email or password. Must be at least 6 characters. Attempts left: ${rem}`)
-        // shake animation via anime
-        const card = document.getElementById("login-card")
-        if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          import("animejs").then(({ animate }) => {
-            animate(card, { x: [0, -6, 6, -4, 4, 0], duration: 420, ease: "outQuad" })
-          })
-        }
-        return
+      loginLimiter.record(false)
+      const rem = loginLimiter.check().remaining
+      setError(`Invalid email or password. Attempts left: ${rem}`)
+      const card = document.getElementById("login-card")
+      if (card && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        import("animejs").then(({ animate }) => {
+          animate(card, { x: [0, -6, 6, -4, 4, 0], duration: 420, ease: "outQuad" })
+        })
       }
-      loginLimiter.reset()
-      login(email)
-      window.location.href = "/dashboard"
-    }, 900)
+      return
+    }
+    const result = await login(email, password)
+    setLoading(false)
+    if (!result.ok) {
+      loginLimiter.record(false)
+      setError(result.error || "Invalid email or password.")
+      return
+    }
+    loginLimiter.reset()
+    window.location.href = "/dashboard"
   }
 
   return (
@@ -103,14 +95,6 @@ export default function LoginPage() {
                 <CardDescription>Enter your email and password to continue. No social clutter.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button type="button" onClick={loginWithGoogle} variant="secondary" className="w-full h-9 rounded-[8px] border border-[var(--border)] bg-white dark:bg-white text-zinc-700 hover:bg-zinc-50 gap-2 font-[500]">
-                  <GoogleIcon /> Continue with Google
-                </Button>
-                <div className="relative flex items-center gap-3 pt-2">
-                  <span className="h-px flex-1 bg-[var(--border)]" />
-                  <span className="text-[11px] text-[var(--text-3)]">or continue with email</span>
-                  <span className="h-px flex-1 bg-[var(--border)]" />
-                </div>
                 <form onSubmit={onSubmit} className="space-y-4 pt-2" noValidate>
                   <div>
                     <label htmlFor="email" className="text-[12px] font-medium">Email</label>

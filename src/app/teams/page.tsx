@@ -11,16 +11,11 @@ import { Search, Users, Crown, Shield, Trophy, Calendar, Activity, Settings, Plu
 type Team = { id: string; name: string; members: number; rank: number; labs: number; challenges: number; reputation: number; role: string; activity: string; color: string }
 
 export default function TeamsPage() {
-  const initial: Team[] = [
-    { id: "atlas", name: "Red Team — Atlas", members: 8, rank: 12, labs: 142, challenges: 89, reputation: 9842, role: "Member", activity: "Active 2h ago", color: "#1A56DB" },
-    { id: "sentinel", name: "Blue Team — Sentinel", members: 12, rank: 4, labs: 201, challenges: 112, reputation: 12342, role: "Owner", activity: "Active now", color: "#059669" },
-    { id: "forensics", name: "Forensics Unit", members: 5, rank: 28, labs: 67, challenges: 34, reputation: 5421, role: "Admin", activity: "Active yesterday", color: "#7C3AED" },
-  ]
   const [teams, setTeams]=React.useState<Team[]>(()=>{
     if(typeof window!=="undefined"){
       try{ const r=localStorage.getItem("aegis_teams"); if(r) return JSON.parse(r)}catch{}
     }
-    return initial
+    return []
   })
   const [q,setQ]=React.useState("")
   const [editing, setEditing]=React.useState<Team|null>(null)
@@ -34,7 +29,7 @@ export default function TeamsPage() {
     setNewName(""); setShowCreate(false)
   }
   const handleDelete=(id:string)=>{
-    if(confirm("Delete team? (localStorage)")) setTeams(prev=>prev.filter(t=>t.id!==id))
+    if(confirm("Delete team?")) setTeams(prev=>prev.filter(t=>t.id!==id))
   }
   const handleLeave=(id:string)=>{
     if(confirm("Leave team?")) setTeams(prev=>prev.filter(t=>t.id!==id))

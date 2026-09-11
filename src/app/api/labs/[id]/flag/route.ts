@@ -1,21 +1,12 @@
 export const dynamic = "force-dynamic"
 
-// In-memory rate limit + flag store (per server instance).
-// For demo / before Supabase persistence.
+import { getServiceSupabase } from "@/lib/supabase"
+import { verifyPassword } from "@/lib/auth-server"
+
+// In-memory rate limit (per server instance).
 
 type RateEntry = { count: number; resetAt: number }
 const rateMap = new Map<string, RateEntry>()
-
-// Demo flag answers – in production these would live in DB / env secrets.
-// For unknown lab ids, any flag matching the regex is considered correct if it contains "aegis" prefix.
-const DEMO_FLAGS: Record<string, string> = {
-  "lab-1": "flag{sqli_fundamentals_2026}",
-  "lab-2": "flag{privesc_linux_2026}",
-  "lab-3": "flag{ad_enumeration_master}",
-  "lab-4": "flag{iam_misconfig_pwned}",
-  "lab-5": "flag{volatility_memory_win}",
-  "lab-6": "flag{wireshark_traffic_hunter}",
-}
 
 const FLAG_REGEX = /^(flag|aegis)\{[^}]+\}$/
 function isValidFlagFormat(flag: string): boolean {
@@ -100,23 +91,50 @@ export async function POST(
     )
   }
 
-  // Determine correctness
-  const expected = DEMO_FLAGS[id]
-  let correct = false
-
-  if (expected) {
-    correct = trimmed === expected
-    // also allow case-insensitive aegis/flag prefix swap for demo convenience
-    if (!correct) {
-      const normalizedSubmitted = trimmed.replace(/^aegis\{/i, "flag{")
-      const normalizedExpected = expected.replace(/^aegis\{/i, "flag{")
-      correct = normalizedSubmitted.toLowerCase() === normalizedExpected.toLowerCase()
-    }
-  } else {
-    // For unknown labs: any valid-format flag is considered correct if it doesn't look like garbage?
-    // Keep demo behavior: accept any valid flag as correct for non-demo labs so platform is testable
-    correct = true
+  // Determine correctness against the scrypt-hashed flag stored in the database.
+  // Flags are never stored or compared in plaintext.
+  const supabase = getServiceSupabase()
+  if (!supabase) {
+    recordAttempt(rateKey)
+    return Response.json(
+      { correct: false, error: "Flag verification unavailable. Database is not configured." },
+      { status: 503 }
+    )
   }
+
+  let flagHash: string | null = null
+  try {
+    const { data: lab } = await supabase
+      .from("labs")
+      .select("flag_hash")
+      .eq("id", id)
+      .limit(1)
+    if (lab && lab.length > 0) flagHash = (lab[0].flag_hash as string) ?? null
+    if (!flagHash) {
+      const { data: ch } = await supabase
+        .from("challenges")
+        .select("flag_hash")
+        .eq("id", id)
+        .limit(1)
+      if (ch && ch.length > 0) flagHash = (ch[0].flag_hash as string) ?? null
+    }
+  } catch {
+    recordAttempt(rateKey)
+    return Response.json(
+      { correct: false, error: "Flag verification failed. Try again." },
+      { status: 500 }
+    )
+  }
+
+  if (!flagHash) {
+    recordAttempt(rateKey)
+    return Response.json(
+      { correct: false, error: "No flag is configured for this lab or challenge." },
+      { status: 404 }
+    )
+  }
+
+  const correct = await verifyPassword(trimmed, flagHash)
 
   if (!correct) {
     recordAttempt(rateKey)
