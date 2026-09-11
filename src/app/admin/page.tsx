@@ -184,21 +184,29 @@ export default function AdminPage() {
     setDataLoading(true)
     setDataError(null)
     try {
-      const [u, v, e, n, c, l, ch, s, m] = await Promise.all([
+      const results = await Promise.allSettled([
         adminApi("users"), adminApi("videos"), adminApi("events"), adminApi("news"),
         adminApi("cves"), adminApi("labs"), adminApi("challenges"), adminApi("settings"), adminApi("messages"),
       ])
-      setUsers((u.items ?? []) as unknown as AdminUser[])
-      setVideos((v.items ?? []) as unknown as AdminVideo[])
-      setEvents((e.items ?? []) as unknown as AdminEvent[])
-      setNews((n.items ?? []) as unknown as AdminNews[])
-      setCves((c.items ?? []) as unknown as AdminCVE[])
-      setAdminLabs((l.items ?? []) as unknown as AdminLab[])
-      setAdminChallenges((ch.items ?? []) as unknown as AdminChallenge[])
-      setInbox((m.items ?? []) as unknown as AdminMessage[])
-      const settings = Object.fromEntries(((s.items ?? []) as { key: string; value: string }[]).map(x => [x.key, x.value]))
+      const get = (i: number) => {
+        const r = results[i]
+        return r.status === "fulfilled" ? (r.value.items ?? []) : []
+      }
+      setUsers(get(0) as unknown as AdminUser[])
+      setVideos(get(1) as unknown as AdminVideo[])
+      setEvents(get(2) as unknown as AdminEvent[])
+      setNews(get(3) as unknown as AdminNews[])
+      setCves(get(4) as unknown as AdminCVE[])
+      setAdminLabs(get(5) as unknown as AdminLab[])
+      setAdminChallenges(get(6) as unknown as AdminChallenge[])
+      setInbox(get(8) as unknown as AdminMessage[])
+      const settings = Object.fromEntries((get(7) as { key: string; value: string }[]).map(x => [x.key, x.value]))
       setAnnouncement(settings.announcement ?? "")
       setMaintenance(settings.maintenance === "1")
+      const failed = results.filter(r => r.status === "rejected").length
+      if (failed > 0) {
+        setDataError(`${failed} section${failed === 1 ? "" : "s"} failed to load (table may not exist yet — run migrations). Showing the rest.`)
+      }
     } catch (err) {
       setDataError(err instanceof Error ? err.message : "Failed to load admin data")
     } finally {
@@ -223,15 +231,13 @@ export default function AdminPage() {
           <CardContent className="p-6">
             <div className="w-10 h-10 rounded-full bg-zinc-900 text-white flex items-center justify-center mx-auto text-[14px] font-bold">A</div>
             <h1 className="mt-4 text-center text-[20px] font-[700] tracking-tight">Admin Login</h1>
-            <p className="text-center text-[13px] text-[var(--text-2)] mt-1">Aegis Platform — Admin Control</p>
-            <p className="text-center text-[11px] text-[var(--text-3)] mt-1">Login required — separate page, not auto open</p>
-            {loginError && <div className="mt-4 p-3 rounded-[8px] bg-red-50 border border-red-200 text-[13px] text-red-700">{escapeHtml(loginError)}</div>}
+            <p className="text-center text-[13px] text-[var(--text-2)] mt-1">Aegis Platform Control Panel</p>
+            {loginError && <div className="mt-4 p-3 rounded-[8px] bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 text-[13px] text-red-700 dark:text-red-400">{escapeHtml(loginError)}</div>}
             <form onSubmit={handleAdminLogin} className="mt-6 space-y-4">
               <input type="hidden" name="csrf" value={csrfToken} />
               <div><label className="text-[12px] font-medium">Username</label><Input value={adminUser} onChange={e=>setAdminUser(e.target.value)} placeholder="admin" required className="mt-1 h-10 bg-[var(--surface)]" autoComplete="username" /></div>
               <div><label className="text-[12px] font-medium">Password</label><Input type="password" value={adminPass} onChange={e=>setAdminPass(e.target.value)} placeholder="••••••••" required className="mt-1 h-10 bg-[var(--surface)]" autoComplete="current-password" /></div>
               <Button type="submit" disabled={loginBusy} className="w-full h-10 rounded-[8px] bg-zinc-900 text-white font-[600]">{loginBusy ? "Verifying..." : "Log in to Admin"}</Button>
-              <p className="text-center text-[11px] text-amber-600">Rate limited: 5 attempts / 15 min per IP • CSRF protected</p>
             </form>
             <div className="mt-6 pt-4 border-t text-center">
               <Link href="/" className="text-[13px] text-[var(--text-2)] hover:text-[var(--text)] hover:underline">← Back to site</Link>

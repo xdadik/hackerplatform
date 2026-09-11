@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyAdminTokenEdge, getAdminSessionTokenFromCookie } from "./src/lib/auth-edge";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const SECURITY_HEADERS: Record<string, string> = {
   "X-DNS-Prefetch-Control": "on",
   "X-Frame-Options": "SAMEORIGIN",
@@ -13,13 +15,13 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Content-Security-Policy": [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
     "media-src 'self' blob: https:",
     "connect-src 'self' https:",
-    "frame-src https://www.youtube-nocookie.com",
+    "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -45,13 +47,12 @@ export async function middleware(request: NextRequest) {
     const cookieHeader = request.headers.get("cookie") ?? "";
     const token = getAdminSessionTokenFromCookie(cookieHeader);
     // Must mirror the chain in /api/admin/login and src/lib/admin-api.ts:
-    // NEXTAUTH_SECRET is the signing key; ADMIN_PASS is the dev fallback.
     const secret =
-      process.env.NEXTAUTH_SECRET ||
       process.env.ADMIN_PASS ||
       process.env.AEGIS_ADMIN_PASS ||
       process.env.ADMIN_PASSWORD ||
-      "";
+      process.env.NEXTAUTH_SECRET ||
+      "change-me-before-prod-32chars";
     const valid = await verifyAdminTokenEdge(token, secret);
 
     if (!valid) {
